@@ -42,29 +42,26 @@ Set up your development environment:
 
 ### TODO
 
-☑ skeleton Discord bot project
-☐ at bot startup, pin a welcome message to each caravan channel
-☐ on caravan channel creation, pin a welcome message to the new channel
-☐ in response to posted itinerary, update pinned message with Google Maps route
-☐ in response to posted itinerary, update pinned message with list of stops (each stop should link to Google Maps)
-☐ allow admins to delegate caravan leaders
-☐ restrict route setting to leaders
-☐ introduce caravan modes: allow leaders to start/stop caravan
-☐ allow leaders to advance caravan (`!next` and `!skip [reason]`)
-☐ allow leaders to add a new next stop while in active mode
-
-☐ allow anyone to `!join` the caravan, optionally with guests
-☐ warn when the attendance nears 20 for any individual gym
-☐ allow caravan members to restrict their attendance to partial routes
-☐ when the caravan is active, allow members to signal `!here`
-☐ allow leaders to `!lobby`
-☐ allow members to query the `!here` statuses with `!list`
-
-☐ allow leaders to register start/stop times
-☐ notify members one hour prior to the caravan starting of the start time and starting location
-☐ automatically start/stop the caravan at the expected times
-
-☐ Docker Compose runner
+- [X] skeleton Discord bot project
+- [ ] at bot startup, pin a welcome message to each caravan channel
+- [ ] on caravan channel creation, pin a welcome message to the new channel
+- [ ] in response to posted itinerary, update pinned message with Google Maps route
+- [ ] in response to posted itinerary, update pinned message with list of stops (each stop should link to Google Maps)
+- [ ] allow admins to delegate caravan leaders
+- [ ] restrict route setting to leaders
+- [ ] introduce caravan modes: allow leaders to start/stop caravan
+- [ ] allow leaders to advance caravan (`!next` and `!skip [reason]`)
+- [ ] allow leaders to add a new next stop while in active mode
+- [ ] allow anyone to `!join` the caravan, optionally with guests
+- [ ] warn when the attendance nears 20 for any individual gym
+- [ ] allow caravan members to restrict their attendance to partial routes
+- [ ] when the caravan is active, allow members to signal `!here`
+- [ ] allow leaders to `!lobby`
+- [ ] allow members to query the `!here` statuses with `!list`
+- [ ] allow leaders to register start/stop times
+- [ ] notify members one hour prior to the caravan starting of the start time and starting location
+- [ ] automatically start/stop the caravan at the expected times
+- [ ] Docker Compose runner
 
 
 ### Notes
