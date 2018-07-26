@@ -1,17 +1,21 @@
-import asyncio
 import contextlib
 import os
 import logging
+import pathlib
+import sys
 
 import discord
 
-
-log = logging.getLogger('bot')
+from .log import log
+from . import places
+from . import pins
+from . import sanitize
 
 
 class MyClient(discord.Client):
-    def __init__(self):
+    def __init__(self, gyms):
         super().__init__()
+        self.gyms = gyms
         self.caravan_channels = set()
 
     async def on_ready(self):
@@ -41,18 +45,31 @@ class MyClient(discord.Client):
         if message.channel not in self.caravan_channels:
             return
 
-        if message.content.startswith('!test'):
-            counter = 0
-            tmp = await message.channel.send('Calculating messages...')
-            async for msg in message.channel.history(limit=100):
-                if msg.author == message.author:
-                    counter += 1
-            await tmp.edit(content=f'You have {counter} messages.')
+        if message.content.startswith('!route'):
+            gyms_not_found = []
 
-        elif message.content.startswith('!sleep'):
+            def gen_gyms(names):
+                for n in names:
+                    try:
+                        yield self.gyms.get_fuzzy(fuzzy_name=n)
+                    except places.PlaceNotFoundException:
+                        gyms_not_found.append(n)
+
             with message.channel.typing():
-                await asyncio.sleep(5.0)
-                await message.channel.send('Done sleeping.')
+                gyms = sanitize.clean_route(message.content)
+                gyms = tuple(gen_gyms(gyms))
+
+                if gyms_not_found:
+                    await message.channel.send(
+                        'Failed to find the following gym{}: {}'.format(
+                            '' if len(gyms_not_found) == 1 else 's',
+                            ', '.join(f'"{g}"' for g in gyms_not_found)))
+                    return
+
+                pin = await self._get_route_pin(message.channel)
+                pin.route = gyms
+
+                await pin.message.edit(content=str(pin))
 
     async def _init_channel(self, channel):
         if not isinstance(channel, discord.TextChannel):
@@ -63,23 +80,34 @@ class MyClient(discord.Client):
 
         self.caravan_channels.add(channel)
 
-        if any(p.author == self.user for p in await channel.pins()):
+        if await self._get_route_pin(channel):
             return  # already has a pinned message
 
-        welcome = await channel.send(
-            f':blue_car: __**{channel.name}**__ :red_car:')
+        welcome = await channel.send(str(pins.RoutePin(channel.name)))
 
         # noinspection PyProtectedMember
         await channel._state.http.pin_message(
             channel_id=channel.id,
             message_id=welcome.id)
 
+    async def _get_route_pin(self, channel):
+        for p in await channel.pins():
+            if p.author == self.user:
+                with contextlib.suppress(pins.UnknownRoutePinFormatException):
+                    return pins.RoutePin.from_message(
+                        message=p,
+                        places=self.gyms)
+
 
 def is_caravan_channel(channel):
     return 'caravan' in channel.name.casefold()
 
 
+def main():
+    client = MyClient(gyms=places.Places.from_json(pathlib.Path(sys.argv[1])))
+    client.run(os.environ['DISCORD_BOT_TOKEN'])
+
+
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    client = MyClient()
-    client.run(os.environ['DISCORD_BOT_TOKEN'])
+    main()
