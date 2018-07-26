@@ -43,8 +43,8 @@ Set up your development environment:
 ### TODO
 
 - [X] skeleton Discord bot project
-- [ ] at bot startup, pin a welcome message to each caravan channel
-- [ ] on caravan channel creation, pin a welcome message to the new channel
+- [X] at bot startup, pin a welcome message to each caravan channel
+- [X] on caravan channel creation, pin a welcome message to the new channel
 - [ ] in response to posted itinerary, update pinned message with Google Maps route
 - [ ] in response to posted itinerary, update pinned message with list of stops (each stop should link to Google Maps)
 - [ ] allow admins to delegate caravan leaders
