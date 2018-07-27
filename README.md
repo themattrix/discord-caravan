@@ -47,7 +47,7 @@ Set up your development environment:
 - [X] on caravan channel creation, pin a welcome message to the new channel
 - [X] in response to posted itinerary, update pinned message with Google Maps route
 - [X] in response to posted itinerary, update pinned message with list of stops
-- [ ] switch pinned message to "embeds" for better formatting
+- [X] switch pinned message to "embeds" for better formatting
 - [ ] allow admins to delegate caravan leaders
 - [ ] restrict route setting to leaders
 - [ ] introduce caravan modes: allow leaders to start/stop caravan

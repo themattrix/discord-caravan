@@ -2,6 +2,7 @@ import contextlib
 import os
 import logging
 import pathlib
+import re
 import sys
 
 import discord
@@ -10,6 +11,10 @@ from .log import log
 from . import places
 from . import pins
 from . import sanitize
+
+
+COMMAND_PATTERN = re.compile(
+    r'^\s*!+\s*(?P<command>.*)')
 
 
 class MyClient(discord.Client):
@@ -45,7 +50,11 @@ class MyClient(discord.Client):
         if message.channel not in self.caravan_channels:
             return
 
-        if message.content.startswith('!route'):
+        match = COMMAND_PATTERN.search(message.content)
+        if not match:
+            return  # not a command
+
+        if match.group('command').strip().casefold() == 'route':
             gyms_not_found = []
 
             def gen_gyms(names):
@@ -55,21 +64,38 @@ class MyClient(discord.Client):
                     except places.PlaceNotFoundException:
                         gyms_not_found.append(n)
 
-            with message.channel.typing():
-                gyms = sanitize.clean_route(message.content)
-                gyms = tuple(gen_gyms(gyms))
+            gyms = sanitize.clean_route(message.content)
+            gyms = tuple(gen_gyms(gyms))
 
-                if gyms_not_found:
+            if gyms_not_found:
+                await message.channel.send(
+                    'Failed to find the following gym{}: {}'.format(
+                        '' if len(gyms_not_found) == 1 else 's',
+                        ', '.join(f'"{g}"' for g in gyms_not_found)))
+                return
+
+            pin = await self._get_route_pin(message.channel)
+
+            if gyms:
+                pin = pin.with_updated_route(route=gyms)
+
+                await pin.message.edit(**pin.content_and_embed)
+                await message.channel.send(
+                    f'Updated the route! ({len(gyms)} stops)')
+            else:
+                if pin.route:
                     await message.channel.send(
-                        'Failed to find the following gym{}: {}'.format(
-                            '' if len(gyms_not_found) == 1 else 's',
-                            ', '.join(f'"{g}"' for g in gyms_not_found)))
-                    return
-
-                pin = await self._get_route_pin(message.channel)
-                pin.route = gyms
-
-                await pin.message.edit(content=str(pin))
+                        f'{pin.route_header_string}\n'
+                        f'{pin.route_string}')
+                else:
+                    await message.channel.send(
+                        'Usage:\n'
+                        '```\n'
+                        '!route\n'
+                        '- <gym-name>\n'
+                        '- <gym-name>\n'
+                        '- ...\n'
+                        '```')
 
     async def _init_channel(self, channel):
         if not isinstance(channel, discord.TextChannel):
@@ -83,7 +109,8 @@ class MyClient(discord.Client):
         if await self._get_route_pin(channel):
             return  # already has a pinned message
 
-        welcome = await channel.send(str(pins.RoutePin(channel.name)))
+        welcome = await channel.send(
+            **pins.RoutePin(channel.name).content_and_embed)
 
         # noinspection PyProtectedMember
         await channel._state.http.pin_message(

@@ -1,17 +1,20 @@
 import re
 
+import discord
+
 from . import sanitize
 
-MESSAGE_PATTERN = re.compile(
-    r'^'
-    r'.*\n+'
-    r'.*Route.*(?:\s+\(.*\))?\n+'
+ROUTE_DESCRIPTION_PATTERN = re.compile(
+    r'.*Route.*\n'
     r'(?:'
-    r'  _Set\sa\sroute.*|'
-    r'  (?P<route>(?:.|\n)+)'
-    r')'
-    r'$',
-    re.IGNORECASE | re.VERBOSE)
+    r'  _No.*|'      # no route set
+    r'  (?P<route>'  # route set 
+    r'      (?:-\s.*\n)*'  
+    r'      (?:-\s.*)'
+    r'  )'
+    r')',
+    re.IGNORECASE | re.VERBOSE
+)
 
 
 class UnknownRoutePinFormatException(Exception):
@@ -20,13 +23,17 @@ class UnknownRoutePinFormatException(Exception):
 
 class RoutePin:
     @classmethod
-    def from_message(cls, message, places=None):
-        match = MESSAGE_PATTERN.match(message.content)
-        if not match:
-            raise ValueError()
-            # raise UnknownRoutePinFormatException()
+    def from_message(cls, message: discord.Message, places=None):
+        if not message.embeds:
+            raise UnknownRoutePinFormatException('Missing embeds!')
 
-        route = match.group('route') if places else None
+        embed = message.embeds[0]
+
+        route_match = ROUTE_DESCRIPTION_PATTERN.search(embed.description)
+        if not route_match:
+            raise UnknownRoutePinFormatException('Unrecognized route format!')
+
+        route = route_match.group('route') if places else None
         if route:
             i = sanitize.clean_route(route)
             i = (places.get_exact(n) for n in i)
@@ -42,18 +49,24 @@ class RoutePin:
         self.route = tuple(route or ())
         self.message = message
 
+    def with_updated_route(self, route):
+        return self.__class__(
+            channel_name=self.channel_name,
+            route=route,
+            message=self.message)
+
     @property
     def title_string(self):
         return f':blue_car: __**{self.channel_name}**__ :red_car:'
 
     @property
-    def route_title_string(self):
-        return '**Route**' + (
-            '' if not self.route else f' (:map: {self.map_link})')
+    def route_header_string(self):
+        return '**Route** — _{} with `!route`_'.format(
+            'set' if not self.route else 'change')
 
     @property
     def route_string(self):
-        return '_Set a route with `!route`._' if not self.route else '\n'.join(
+        return '_No route set!_' if not self.route else '\n'.join(
             f'- {p.name}' for p in self.route)
 
     @property
@@ -61,10 +74,14 @@ class RoutePin:
         return 'https://www.google.com/maps/dir/{}'.format(
             '/'.join(i.location for i in self.route))
 
-    # TODO: use embeds
-    def __str__(self):
-        return (
-            f'{self.title_string}\n'
-            f'\n'
-            f'{self.route_title_string}\n'
-            f'{self.route_string}')
+    @property
+    def content_and_embed(self):
+        return {
+            'content': self.title_string,
+            'embed': discord.Embed(
+                title=f'Click here for route directions!',
+                url=self.map_link,
+                description=(
+                    f'{self.route_header_string}\n'
+                    f'{self.route_string}')),
+        }

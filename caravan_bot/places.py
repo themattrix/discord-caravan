@@ -1,4 +1,5 @@
 import dataclasses
+import itertools
 import json
 
 import fuzzywuzzy.process
@@ -20,14 +21,25 @@ class Places:
     @classmethod
     def from_json(cls, path):
         with path.open() as f:
-            places = json.load(f)
+            raw_places = json.load(f)
 
-        log.info(f'Loaded {len(places)} place(s) from "{path}".')
+        log.info(f'Loaded {len(raw_places)} place(s) from "{path}".')
 
-        return cls(places=places)
+        return cls(
+            places={
+                p: v['location']
+                for p, v in raw_places.items()
+            },
+            aliases={
+                a: p
+                for p, v in raw_places.items()
+                for a in v.get('aliases', ())
+            })
 
-    def __init__(self, places):
+    def __init__(self, places, aliases):
         self.places = places
+        self.aliases = aliases
+        self.__choices = tuple(itertools.chain(places, aliases))
 
     def get_exact(self, name) -> Place:
         try:
@@ -38,15 +50,19 @@ class Places:
     def get_fuzzy(self, fuzzy_name) -> Place:
         result = fuzzywuzzy.process.extractOne(
             query=fuzzy_name,
-            choices=tuple(self.places),
-            score_cutoff=50)
+            choices=tuple(self.__choices))
 
         if not result:
             raise PlaceNotFoundException(fuzzy_name)
 
-        real_name, score = result
+        matched_name, score = result
+
         log.info(
-            f'Matched "{fuzzy_name}" to place "{real_name}" with score '
-            f'{score}.')
+            f'Matched "{fuzzy_name}" to "{matched_name}" with score {score}.')
+
+        if score < 80:
+            raise PlaceNotFoundException(fuzzy_name)
+
+        real_name = self.aliases.get(matched_name, matched_name)
 
         return Place(name=real_name, location=self.places[real_name])
