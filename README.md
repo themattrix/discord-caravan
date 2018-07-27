@@ -48,8 +48,8 @@ Set up your development environment:
 - [X] in response to posted itinerary, update pinned message with Google Maps route
 - [X] in response to posted itinerary, update pinned message with list of stops
 - [X] switch pinned message to "embeds" for better formatting
-- [ ] allow admins to delegate caravan leaders
-- [ ] restrict route setting to leaders
+- [X] allow admins to delegate caravan leaders
+- [X] restrict route setting to leaders
 - [ ] introduce caravan modes: allow leaders to start/stop caravan
 - [ ] allow leaders to advance caravan (`!next` and `!skip [reason]`)
 - [ ] allow leaders to add a new next stop while in active mode

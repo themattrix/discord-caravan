@@ -1,7 +1,10 @@
 import re
 
+from typing import Callable, Iterable, Optional
+
 import discord
 
+from . import natural_language
 from . import sanitize
 
 ROUTE_DESCRIPTION_PATTERN = re.compile(
@@ -17,7 +20,7 @@ ROUTE_DESCRIPTION_PATTERN = re.compile(
 )
 
 
-class UnknownRoutePinFormatException(Exception):
+class RoutePinFormatException(Exception):
     """Raised if the message cannot be parsed."""
 
 
@@ -25,13 +28,13 @@ class RoutePin:
     @classmethod
     def from_message(cls, message: discord.Message, places=None):
         if not message.embeds:
-            raise UnknownRoutePinFormatException('Missing embeds!')
+            raise RoutePinFormatException('Missing embeds!')
 
         embed = message.embeds[0]
 
         route_match = ROUTE_DESCRIPTION_PATTERN.search(embed.description)
         if not route_match:
-            raise UnknownRoutePinFormatException('Unrecognized route format!')
+            raise RoutePinFormatException('Unrecognized route format!')
 
         route = route_match.group('route') if places else None
         if route:
@@ -85,3 +88,69 @@ class RoutePin:
                     f'{self.route_header_string}\n'
                     f'{self.route_string}')),
         }
+
+
+MEMBERS_PATTERN = re.compile(
+    r'.*Leader.*\n'
+    r'(?:'
+    r'  _No.*|'           # no leaders set
+    r'  (?P<leaders>.*)'  # leaders set 
+    r')',
+    re.IGNORECASE | re.VERBOSE
+)
+
+
+class MembersPinFormatException(Exception):
+    """Raised if the message cannot be parsed."""
+
+
+class MembersPin:
+    @classmethod
+    def from_message(cls, message: discord.Message, gen_users: Callable):
+        match = MEMBERS_PATTERN.search(message.content)
+        if not match:
+            raise MembersPinFormatException('Unrecognized members format!')
+
+        leaders_string = match.group('leaders') or ''
+
+        return cls(
+            leaders=gen_users(sanitize.gen_user_ids(leaders_string)),
+            message=message)
+
+    def __init__(
+            self,
+            leaders: Iterable[discord.User] = (),
+            message: Optional[discord.Message] = None):
+        self.leaders = frozenset(leaders)
+        self.message = message
+
+    def with_updated_leaders(self, leaders: Iterable[discord.User]):
+        return self.__class__(leaders=leaders, message=self.message)
+
+    @property
+    def leaders_header_string(self):
+        return '**Caravan Leader{}** — _{} with `!leaders`_'.format(
+            '' if len(self.leaders) == 1 else 's',
+            'set' if not self.leaders else 'change')
+
+    @property
+    def sorted_leaders(self):
+        return sorted(self.leaders, key=lambda u: u.id)
+
+    @property
+    def leaders_list_string(self):
+        return natural_language.join(u.mention for u in self.sorted_leaders)
+
+    @property
+    def leaders_string(self):
+        return '_No leaders set!_' if not self.leaders else (
+            self.leaders_list_string)
+
+    @property
+    def content_and_embed(self):
+        return {
+            'content': (
+                f'{self.leaders_header_string}\n'
+                f'{self.leaders_string}'),
+        }
+
