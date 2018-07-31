@@ -5,7 +5,7 @@ import pathlib
 import re
 import sys
 
-from typing import Iterable
+from typing import Iterable, Generator
 
 import discord
 
@@ -67,6 +67,11 @@ class CaravanClient(discord.Client):
             await self._on_route_command(
                 message=message)
 
+        elif command_type in {'start', 'stop', 'resume', 'reset'}:
+            await self._on_mode_command(
+                message=message,
+                command=command_type)
+
     async def _on_leaders_command(self, message, full_command):
         pin = await self._get_members_pin(message.channel)
 
@@ -77,8 +82,8 @@ class CaravanClient(discord.Client):
 
         if not is_authorized:
             await message.channel.send(
-                'Only admins and caravan leaders are allowed to delegate '
-                'caravan leaders! {}'.format(
+                ':warning: Only admins and caravan leaders are allowed to '
+                'delegate caravan leaders! {}'.format(
                     'No leaders are currently set.' if not pin.leaders else (
                         'The current leader{} {}.'.format(
                             ' is' if len(pin.leaders) == 1 else 's are ',
@@ -106,43 +111,39 @@ class CaravanClient(discord.Client):
                 pin.leaders_list_string))
 
     async def _on_route_command(self, message):
-        gyms_not_found = []
+        is_leader = await self._message_author_is_leader(message)
 
-        def gen_gyms(names):
-            for n in names:
-                try:
-                    yield self.gyms.get_fuzzy(fuzzy_name=n)
-                except places.PlaceNotFoundException:
-                    gyms_not_found.append(n)
+        try:
+            route = pins.get_route(
+                route=message.content,
+                all_places=self.gyms,
+                fuzzy=True)
+            gyms_not_found = ()
+        except pins.UnknownRouteLocations as e:
+            route = ()
+            gyms_not_found = e.unknown_names
 
-        gyms = sanitize.clean_route(message.content)
-        gyms = tuple(gen_gyms(gyms))
-
-        # noinspection PyProtectedMember
-        is_leader = message.author._user in (
-            (await self._get_members_pin(message.channel)).leaders)
-
-        if not is_leader and (gyms or gyms_not_found):
+        if not is_leader and (route or gyms_not_found):
             await message.channel.send(
-                'Only caravan leaders are allowed to set a route! You may '
-                'query the route with `!route`.')
+                ':warning: Only caravan leaders are allowed to set a route! '
+                'You may query the route with `!route`.')
             return
 
         if gyms_not_found:
             await message.channel.send(
-                'Failed to find the following gym{}: {}'.format(
+                ':warning: Failed to find the following gym{}: {}'.format(
                     '' if len(gyms_not_found) == 1 else 's',
                     ', '.join(f'"{g}"' for g in gyms_not_found)))
             return
 
         pin = await self._get_route_pin(message.channel)
 
-        if gyms:
-            pin = pin.with_updated_route(route=gyms)
+        if route:
+            pin.reroute(route=route)
 
             await pin.message.edit(**pin.content_and_embed)
             await message.channel.send(
-                f'Updated the route! ({len(gyms)} stops)')
+                f'Updated the route! ({len(route)} stops)')
         else:
             if pin.route:
                 await message.channel.send(
@@ -157,6 +158,26 @@ class CaravanClient(discord.Client):
                     '- <gym-name>\n'
                     '- ...\n'
                     '```')
+
+    async def _on_mode_command(self, message, command):
+        if not await self._message_author_is_leader(message):
+            await message.channel.send(
+                f':warning: Only caravan leaders are allowed to {command} the '
+                f'caravan!')
+            return
+
+        pin = await self._get_route_pin(message.channel)
+
+        if command == 'resume':
+            command = 'start'
+        try:
+            getattr(pin, command)()
+        except pins.CaravanStatusAlreadyCorrect as e:
+            await message.channel.send(str(e))
+            return
+
+        await pin.message.edit(**pin.content_and_embed)
+        await message.channel.send(pin.status_string)
 
     async def _init_channel(self, channel):
         if not isinstance(channel, discord.TextChannel):
@@ -175,15 +196,15 @@ class CaravanClient(discord.Client):
             await pin_message(await channel.send(
                 **pins.MembersPin().content_and_embed))
 
-    async def _get_route_pin(self, channel):
+    async def _get_route_pin(self, channel) -> pins.RoutePin:
         for p in await channel.pins():
             if p.author == self.user:
                 with contextlib.suppress(pins.RoutePinFormatException):
                     return pins.RoutePin.from_message(
                         message=p,
-                        places=self.gyms)
+                        all_places=self.gyms)
 
-    async def _get_members_pin(self, channel):
+    async def _get_members_pin(self, channel) -> pins.MembersPin:
         for p in await channel.pins():
             if p.author == self.user:
                 with contextlib.suppress(pins.MembersPinFormatException):
@@ -191,7 +212,15 @@ class CaravanClient(discord.Client):
                         message=p,
                         gen_users=self._ids_to_users)
 
-    def _ids_to_users(self, ids: Iterable[str]):
+    async def _message_author_is_leader(self, message) -> bool:
+        # noinspection PyProtectedMember
+        return message.author._user in (
+            (await self._get_members_pin(message.channel)).leaders)
+
+    def _ids_to_users(
+            self,
+            ids: Iterable[str]
+            ) -> Generator[discord.User, None, None]:
         it = (self.get_user(i) for i in ids)
         it = (i for i in it if i is not None)
         yield from it

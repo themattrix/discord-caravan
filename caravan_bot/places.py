@@ -41,13 +41,16 @@ class Places:
         self.aliases = aliases
         self.__choices = tuple(itertools.chain(places, aliases))
 
-    def get_exact(self, name) -> Place:
+    def get(self, name: str, fuzzy: bool) -> Place:
+        return self.get_fuzzy(name) if fuzzy else self.get_exact(name)
+
+    def get_exact(self, name: str) -> Place:
         try:
             return Place(name=name, location=self.places[name])
         except KeyError:
             raise PlaceNotFoundException(name)
 
-    def get_fuzzy(self, fuzzy_name) -> Place:
+    def get_fuzzy(self, fuzzy_name: str) -> Place:
         result = fuzzywuzzy.process.extractOne(
             query=fuzzy_name,
             choices=tuple(self.__choices))
