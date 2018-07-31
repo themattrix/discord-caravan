@@ -51,7 +51,7 @@ Set up your development environment:
 - [X] allow admins to delegate caravan leaders
 - [X] restrict route setting to leaders
 - [X] introduce caravan modes: allow leaders to start/stop caravan
-- [ ] allow leaders to advance caravan (`!next` and `!skip [reason]`)
+- [X] allow leaders to advance caravan (`!next` and `!skip [reason]`)
 - [ ] allow leaders to add a new next stop while in active mode
 - [ ] allow anyone to `!join` the caravan, optionally with guests
 - [ ] warn when the attendance nears 20 for any individual gym

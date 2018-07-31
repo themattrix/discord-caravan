@@ -41,6 +41,15 @@ class UnknownRouteLocations(Exception):
     def __init__(self, unknown_names):
         self.unknown_names = unknown_names
 
+    def __str__(self):
+        return 'Unknown route location{}: {}'.format(
+            '' if len(self.unknown_names) == 1 else 's',
+            ', '.join(f'"{u}"' for u in self.unknown_names))
+
+
+class RouteExhausted(Exception):
+    """Raised when attempting to advance past the end of the route."""
+
 
 class CaravanStatus(enum.Enum):
     PLANNING = 0
@@ -65,11 +74,18 @@ STATUS_TOKEN_TO_ENUM = {
 class RouteStop:
     place: places.Place
     visited: bool
+    skip_reason: Optional[str] = None
+
+    def reset(self):
+        self.visited = False
+        self.skip_reason = None
 
     def __str__(self):
-        return '{strike}{name}{strike}'.format(
+        return '{strike}{name}{strike}{skip}'.format(
             strike='~~' if self.visited else '',
-            name=self.place.name)
+            name=self.place.name,
+            skip='' if self.skip_reason is None else ' — _skipped{}_'.format(
+                '' if not self.skip_reason else f': "{self.skip_reason}"'))
 
 
 def get_route(
@@ -84,7 +100,8 @@ def get_route(
             try:
                 yield RouteStop(
                     place=all_places.get(name=node.name, fuzzy=fuzzy),
-                    visited=node.visited)
+                    visited=node.visited,
+                    skip_reason=node.skip_reason)
             except places.PlaceNotFoundException:
                 unknown_place_names.append(node.name)
 
@@ -168,7 +185,21 @@ class RoutePin:
                 'The caravan is already in the planning phase!')
         self.status = CaravanStatus.PLANNING
         for s in self.route:
-            s.visited = False
+            s.reset()
+
+    def advance(self):
+        self._advance()
+
+    def skip(self, reason: Optional[str]):
+        prev = self._advance()
+        prev.skip_reason = reason or ''
+
+    def _advance(self) -> RouteStop:
+        remaining = self.remaining_route
+        if not remaining:
+            raise RouteExhausted()
+        remaining[0].visited = True
+        return remaining[0]
 
     @property
     def remaining_route(self) -> Tuple[RouteStop, ...]:
@@ -215,6 +246,9 @@ class RoutePin:
                     f'\n'
                     f'{self.route_header_string}\n'
                     f'{self.route_string}'))}
+
+    async def flush(self):
+        await self.message.edit(**self.content_and_embed)
 
 
 MEMBERS_PATTERN = re.compile(

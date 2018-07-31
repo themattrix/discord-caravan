@@ -72,6 +72,12 @@ class CaravanClient(discord.Client):
                 message=message,
                 command=command_type)
 
+        elif command_type in {'next', 'skip'}:
+            await self._on_advance_command(
+                message=message,
+                command_type=command_type,
+                full_command=match.group('command'))
+
     async def _on_leaders_command(self, message, full_command):
         pin = await self._get_members_pin(message.channel)
 
@@ -104,7 +110,7 @@ class CaravanClient(discord.Client):
 
         pin = pin.with_updated_leaders(leaders=users)
 
-        await pin.message.edit(**pin.content_and_embed)
+        await pin.flush()
         await message.channel.send(
             'Updated the leader{} to {}!'.format(
                 '' if len(users) == 1 else 's',
@@ -141,7 +147,7 @@ class CaravanClient(discord.Client):
         if route:
             pin.reroute(route=route)
 
-            await pin.message.edit(**pin.content_and_embed)
+            await pin.flush()
             await message.channel.send(
                 f'Updated the route! ({len(route)} stops)')
         else:
@@ -176,8 +182,49 @@ class CaravanClient(discord.Client):
             await message.channel.send(str(e))
             return
 
-        await pin.message.edit(**pin.content_and_embed)
+        await pin.flush()
         await message.channel.send(pin.status_string)
+
+    async def _on_advance_command(self, message, command_type, full_command):
+        if not await self._message_author_is_leader(message):
+            await message.channel.send(
+                ':warning: Only caravan leaders are allowed to advance the '
+                'caravan!')
+            return
+
+        pin = await self._get_route_pin(message.channel)
+
+        if pin.status != pins.CaravanStatus.ACTIVE:
+            await message.channel.send(
+                ':warning: Caravan not in active mode, so it can\'t be '
+                'advanced! (First start the caravan with `!start`.)')
+            return
+
+        try:
+            if command_type == 'next':
+                pin.advance()
+            else:
+                try:
+                    reason = full_command.split(maxsplit=1)[1]
+                except IndexError:
+                    reason = None
+                pin.skip(reason=reason)
+
+        except pins.RouteExhausted:
+            await message.channel.send(  # TODO: suggest !add'ing more stops
+                ':warning: Can\'t advance the caravan; no more stops!')
+            return
+
+        await pin.flush()
+
+        try:
+            next_stop = pin.remaining_route[0]
+            # Just output the place name and let the Professor Willow Bot
+            # provide the details.
+            await message.channel.send(next_stop.place.name)
+        except IndexError:
+            await message.channel.send(
+                'Congratulations! Route complete! :first_place:')
 
     async def _init_channel(self, channel):
         if not isinstance(channel, discord.TextChannel):

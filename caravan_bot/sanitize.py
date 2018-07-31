@@ -2,37 +2,42 @@ import dataclasses
 import re
 import string
 
-ROUTE_LINE = re.compile(
-    r'^\s*(?:-|\d+[.)]?)\s*(?P<place>.*?)\s*$',
-    re.MULTILINE)
+from typing import Optional
 
-NON_PARENS = re.compile(
-    r'^(?P<non_parens>.*?)\s*\(.*?\)$')
+ROUTE_LINE = re.compile(
+    r'^\s*'
+    r'(?:-|\d+[.)]?)\s*'
+    r'(?P<strikethrough>(?:~~)?)'
+    r'(?P<place>.*?)'
+    r'(?P=strikethrough)\s*'
+    r'(?:\(.*?\)\s*)?'
+    r'(?P<skipped>—\s*_?skipped(?::\s*"(?P<skip_reason>.*?)")?_?\s*)?'
+    r'$',
+    re.MULTILINE | re.IGNORECASE)
 
 USER_ID_PATTERN = re.compile(
     r'<@(?P<id>\d+)>')
 
-# A particular route node has been visited if it has strike-through.
-HAS_VISITED = re.compile(
-    r'^~~.*~~$')
-
-# Strip whitespace and quotes from around place names.
-STRIP = '\'"“‟‘‛”’"❛❜❝❞' + string.whitespace
+QUOTES_AND_WHITESPACE = '\'"“‟‘‛”’"❛❜❝❞' + string.whitespace
 
 
 @dataclasses.dataclass
 class RouteNode:
     name: str
     visited: bool
+    skip_reason: Optional[str]
+
+    @classmethod
+    def from_match(cls, match):
+        place = match.group('place').strip(QUOTES_AND_WHITESPACE)
+        visited = bool(match.group('strikethrough'))
+        skipped = match.group('skipped') is not None
+        skip_reason = match.group('skip_reason') or ('' if skipped else None)
+        return cls(name=place, visited=visited, skip_reason=skip_reason)
 
 
 def clean_route(route: str):
-    it = ROUTE_LINE.finditer(route)
-    it = (m.group('place') for m in it)
-    it = (NON_PARENS.sub(r'\g<non_parens>', m) for m in it)
-    it = (m.strip(STRIP) for m in it)
-    it = (RouteNode(name=m, visited=bool(HAS_VISITED.match(m))) for m in it)
-    yield from it
+    yield from (RouteNode.from_match(m) for m in ROUTE_LINE.finditer(route))
 
 
 def gen_user_ids(content: str):
