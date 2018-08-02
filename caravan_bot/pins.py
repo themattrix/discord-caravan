@@ -10,8 +10,8 @@ from . import natural_language
 from . import places
 from . import sanitize
 
-STATUS_PATTERN = re.compile(
-    r'\bStatus\b.*?—\s*(?P<status>\w+)',
+MODE_PATTERN = re.compile(
+    r'\bStatus\b.*?—\s*(?P<mode>\w+)',
     re.IGNORECASE)
 
 ROUTE_PATTERN = re.compile(
@@ -31,8 +31,12 @@ class RoutePinFormatException(Exception):
     """Raised if the message cannot be parsed."""
 
 
-class CaravanStatusAlreadyCorrect(Exception):
-    """Raised when the caravan status does not need to be changed."""
+class CaravanModeAlreadyCorrect(Exception):
+    """Raised when the caravan mode does not need to be changed."""
+
+
+class EmptyRouteException(Exception):
+    """Raised when a route was expected to be non-empty."""
 
 
 class UnknownRouteLocations(Exception):
@@ -51,29 +55,29 @@ class RouteExhausted(Exception):
     """Raised when attempting to advance past the end of the route."""
 
 
-class CaravanStatus(enum.Enum):
+class CaravanMode(enum.Enum):
     PLANNING = 0
     ACTIVE = 1
     COMPLETED = 2
 
 
-ENUM_TO_STATUS_STRING = {
-    CaravanStatus.PLANNING: 'Planning... :map:',
-    CaravanStatus.ACTIVE: 'Active! :race_car:',
-    CaravanStatus.COMPLETED: 'Completed! :fireworks:',
+ENUM_TO_MODE_STRING = {
+    CaravanMode.PLANNING: 'Planning... :map:',
+    CaravanMode.ACTIVE: 'Active! :race_car:',
+    CaravanMode.COMPLETED: 'Completed! :fireworks:',
 }
 
-STATUS_TOKEN_TO_ENUM = {
-    'planning': CaravanStatus.PLANNING,
-    'active': CaravanStatus.ACTIVE,
-    'completed': CaravanStatus.COMPLETED,
+MODE_TOKEN_TO_ENUM = {
+    'planning': CaravanMode.PLANNING,
+    'active': CaravanMode.ACTIVE,
+    'completed': CaravanMode.COMPLETED,
 }
 
 
 @dataclasses.dataclass
 class RouteStop:
     place: places.Place
-    visited: bool
+    visited: bool = False
     skip_reason: Optional[str] = None
 
     def reset(self):
@@ -86,6 +90,30 @@ class RouteStop:
             name=self.place.name,
             skip='' if self.skip_reason is None else ' — _skipped{}_'.format(
                 '' if not self.skip_reason else f': "{self.skip_reason}"'))
+
+
+@dataclasses.dataclass
+class RouteStatistics:
+    stops_visited: int
+    stops_skipped: int
+    stops_remaining: int
+
+    @classmethod
+    def from_route(cls, route: Iterable[RouteStop]):
+        visited, skipped, remaining = 0, 0, 0
+
+        for s in route:
+            if s.visited and s.skip_reason is None:
+                visited += 1
+            elif s.visited:
+                skipped += 1
+            else:
+                remaining += 1
+
+        return cls(
+            stops_visited=visited,
+            stops_skipped=skipped,
+            stops_remaining=remaining)
 
 
 def get_route(
@@ -127,16 +155,16 @@ class RoutePin:
 
         embed = message.embeds[0]
 
-        status_match = STATUS_PATTERN.search(embed.description)
-        if not status_match:
-            raise RoutePinFormatException('Unrecognized status format!')
+        mode_match = MODE_PATTERN.search(embed.description)
+        if not mode_match:
+            raise RoutePinFormatException('Unrecognized mode format!')
 
         try:
-            status = STATUS_TOKEN_TO_ENUM[
-                status_match.group('status').casefold()]
+            mode = MODE_TOKEN_TO_ENUM[
+                mode_match.group('mode').casefold()]
         except KeyError:
             raise RoutePinFormatException(
-                f'Unrecognized status: {status_match.group("status")}')
+                f'Unrecognized mode: {mode_match.group("mode")}')
 
         route_match = ROUTE_PATTERN.search(embed.description)
         if not route_match:
@@ -149,41 +177,41 @@ class RoutePin:
         return cls(
             channel_name=message.channel.name,
             route=route,
-            status=status,
+            mode=mode,
             message=message)
 
     def __init__(
             self,
             channel_name: str,
             route: Optional[Iterable[RouteStop]] = (),
-            status: CaravanStatus = CaravanStatus.PLANNING,
+            mode: CaravanMode = CaravanMode.PLANNING,
             message: discord.Message = None):
 
         self.channel_name = channel_name
         self.route = tuple(route or ())
-        self.status = status
+        self.mode = mode
         self.message = message
 
     def reroute(self, route):
         self.route = route
 
     def start(self):
-        if self.status == CaravanStatus.ACTIVE:
-            raise CaravanStatusAlreadyCorrect(
+        if self.mode == CaravanMode.ACTIVE:
+            raise CaravanModeAlreadyCorrect(
                 'The caravan is already in progress!')
-        self.status = CaravanStatus.ACTIVE
+        self.mode = CaravanMode.ACTIVE
 
     def stop(self):
-        if self.status in {CaravanStatus.PLANNING, CaravanStatus.COMPLETED}:
-            raise CaravanStatusAlreadyCorrect(
+        if self.mode in {CaravanMode.PLANNING, CaravanMode.COMPLETED}:
+            raise CaravanModeAlreadyCorrect(
                 'The caravan is already _not_ in progress!')
-        self.status = CaravanStatus.COMPLETED
+        self.mode = CaravanMode.COMPLETED
 
     def reset(self):
-        if self.status == CaravanStatus.PLANNING:
-            raise CaravanStatusAlreadyCorrect(
+        if self.mode == CaravanMode.PLANNING:
+            raise CaravanModeAlreadyCorrect(
                 'The caravan is already in the planning phase!')
-        self.status = CaravanStatus.PLANNING
+        self.mode = CaravanMode.PLANNING
         for s in self.route:
             s.reset()
 
@@ -202,8 +230,26 @@ class RoutePin:
         return remaining[0]
 
     @property
+    def first_unvisited_index(self) -> int:
+        for i, s in enumerate(self.route):
+            if not s.visited:
+                return i
+        return 0
+
+    def add_route(self, route: Tuple[RouteStop], append: bool):
+        if not route:
+            raise EmptyRouteException()
+        insert_at = len(self.route) if append else self.first_unvisited_index
+        self.route = (
+            self.route[:insert_at] + route + self.route[insert_at:])
+
+    @property
     def remaining_route(self) -> Tuple[RouteStop, ...]:
         return tuple(i for i in self.route if not i.visited)
+
+    @property
+    def route_statistics(self) -> RouteStatistics:
+        return RouteStatistics.from_route(self.route)
 
     @property
     def title_string(self):
@@ -211,8 +257,7 @@ class RoutePin:
 
     @property
     def route_header_string(self):
-        return '**Route** — _{} with `!route`_'.format(
-            'set' if not self.route else 'change')
+        return '**Route**' + '' if self.route else ' — _set with `!route`_'
 
     @property
     def route_string(self):
@@ -221,7 +266,7 @@ class RoutePin:
 
     @property
     def status_string(self):
-        return f'**Status** — {ENUM_TO_STATUS_STRING[self.status]}'
+        return f'**Status** — {ENUM_TO_MODE_STRING[self.mode]}'
 
     @property
     def map_link(self):
@@ -231,15 +276,20 @@ class RoutePin:
             f'https://www.google.com/maps/dir/{locations}')
 
     @property
+    def title(self):
+        if self.mode == CaravanMode.COMPLETED:
+            return 'Caravan complete!'
+        if self.remaining_route:
+            return 'Click here for route directions!'
+        return 'Please set a route!'
+
+    @property
     def content_and_embed(self):
-        url = self.map_link
         return {
             'content': self.title_string,
             'embed': discord.Embed(
-                title=(
-                    'Please set a route!' if not url else
-                    'Click here for route directions!'),
-                url=url,
+                title=self.title,
+                url=self.map_link,
                 description=(
                     f'\n'
                     f'{self.status_string}\n'
@@ -290,9 +340,9 @@ class MembersPin:
 
     @property
     def leaders_header_string(self):
-        return '**Caravan Leader{}** — _{} with `!leaders`_'.format(
+        return '**Caravan Leader{}**{}'.format(
             '' if len(self.leaders) == 1 else 's',
-            'set' if not self.leaders else 'change')
+            '' if not self.leaders else ' — _set with `!leaders`_')
 
     @property
     def sorted_leaders(self):
@@ -315,3 +365,5 @@ class MembersPin:
                 f'{self.leaders_string}'),
         }
 
+    async def flush(self):
+        await self.message.edit(**self.content_and_embed)

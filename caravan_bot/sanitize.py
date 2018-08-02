@@ -21,6 +21,10 @@ USER_ID_PATTERN = re.compile(
 QUOTES_AND_WHITESPACE = '\'"“‟‘‛”’"❛❜❝❞' + string.whitespace
 
 
+def clean_route(route: str):
+    yield from (RouteNode.from_match(m) for m in ROUTE_LINE.finditer(route))
+
+
 @dataclasses.dataclass
 class RouteNode:
     name: str
@@ -34,10 +38,6 @@ class RouteNode:
         skipped = match.group('skipped') is not None
         skip_reason = match.group('skip_reason') or ('' if skipped else None)
         return cls(name=place, visited=visited, skip_reason=skip_reason)
-
-
-def clean_route(route: str):
-    yield from (RouteNode.from_match(m) for m in ROUTE_LINE.finditer(route))
 
 
 def gen_user_ids(content: str):

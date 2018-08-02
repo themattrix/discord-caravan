@@ -10,13 +10,14 @@ from typing import Iterable, Generator
 import discord
 
 from .log import log
+from . import natural_language
 from . import places
 from . import pins
 from . import sanitize
 
 
 COMMAND_PATTERN = re.compile(
-    r'^\s*!+\s*(?P<command>.*)')
+    r'^\s*!+[ \t]*(?P<command>\w+)(?:[ \t]+(?P<args>.*))?')
 
 
 class CaravanClient(discord.Client):
@@ -56,29 +57,31 @@ class CaravanClient(discord.Client):
         if not match:
             return  # not a command
 
-        command_type = match.group('command').strip().split()[0].casefold()
+        command, args = match.group('command'), match.group('args')
+        command = command.casefold()
 
-        if command_type in {'leader', 'leaders'}:
-            await self._on_leaders_command(
-                message=message,
-                full_command=match.group('command'))
+        if command in {'leader', 'leaders'}:
+            await self._on_leaders_command(message=message, args=args)
 
-        elif command_type == 'route':
-            await self._on_route_command(
-                message=message)
+        elif command == 'route':
+            await self._on_route_command(message=message)
 
-        elif command_type in {'start', 'stop', 'resume', 'reset'}:
-            await self._on_mode_command(
-                message=message,
-                command=command_type)
+        elif command in {'start', 'stop', 'resume', 'reset'}:
+            await self._on_mode_command(message=message, command=command)
 
-        elif command_type in {'next', 'skip'}:
+        elif command in {'next', 'skip'}:
             await self._on_advance_command(
                 message=message,
-                command_type=command_type,
-                full_command=match.group('command'))
+                command=command,
+                args=args)
 
-    async def _on_leaders_command(self, message, full_command):
+        elif command in {'add', 'append'}:
+            await self._on_add_command(
+                message=message,
+                command=command,
+                args=args)
+
+    async def _on_leaders_command(self, message, args):
         pin = await self._get_members_pin(message.channel)
 
         # noinspection PyProtectedMember
@@ -96,7 +99,7 @@ class CaravanClient(discord.Client):
                             pin.leaders_list_string))))
             return
 
-        it = sanitize.gen_user_ids(full_command)
+        it = sanitize.gen_user_ids(args)
         it = self._ids_to_users(it)
         users = tuple(it)
 
@@ -149,7 +152,9 @@ class CaravanClient(discord.Client):
 
             await pin.flush()
             await message.channel.send(
-                f'Updated the route! ({len(route)} stops)')
+                f'New route pinned! ({len(route)} stops)\n'
+                f'_You may change it again with `!route` or add stops with '
+                f'`!add`._')
         else:
             if pin.route:
                 await message.channel.send(
@@ -178,14 +183,27 @@ class CaravanClient(discord.Client):
             command = 'start'
         try:
             getattr(pin, command)()
-        except pins.CaravanStatusAlreadyCorrect as e:
+        except pins.CaravanModeAlreadyCorrect as e:
             await message.channel.send(str(e))
             return
 
         await pin.flush()
-        await message.channel.send(pin.status_string)
+        await message.channel.send(
+            pin.status_string.replace('Status', 'Caravan'))
 
-    async def _on_advance_command(self, message, command_type, full_command):
+        if command == 'start':
+            try:
+                await message.channel.send(pin.remaining_route[0].place.name)
+            except IndexError:
+                await message.channel.send(
+                    ':warning: The caravan is active but no route is set! '
+                    '_Set a route with `!route` or add stops with `!add`._')
+
+        elif command == 'stop':
+            await message.channel.send(get_route_statistics_message(
+                stats=pin.route_statistics))
+
+    async def _on_advance_command(self, message, command, args):
         if not await self._message_author_is_leader(message):
             await message.channel.send(
                 ':warning: Only caravan leaders are allowed to advance the '
@@ -194,25 +212,22 @@ class CaravanClient(discord.Client):
 
         pin = await self._get_route_pin(message.channel)
 
-        if pin.status != pins.CaravanStatus.ACTIVE:
+        if pin.mode != pins.CaravanMode.ACTIVE:
             await message.channel.send(
                 ':warning: Caravan not in active mode, so it can\'t be '
-                'advanced! (First start the caravan with `!start`.)')
+                'advanced! _First start the caravan with `!start`._')
             return
 
         try:
-            if command_type == 'next':
+            if command == 'next':
                 pin.advance()
             else:
-                try:
-                    reason = full_command.split(maxsplit=1)[1]
-                except IndexError:
-                    reason = None
-                pin.skip(reason=reason)
+                pin.skip(reason=args)
 
         except pins.RouteExhausted:
-            await message.channel.send(  # TODO: suggest !add'ing more stops
-                ':warning: Can\'t advance the caravan; no more stops!')
+            await message.channel.send(
+                ':warning: Can\'t advance the caravan; no more stops! _Try '
+                'adding stops with `!add`._')
             return
 
         await pin.flush()
@@ -222,9 +237,51 @@ class CaravanClient(discord.Client):
             # Just output the place name and let the Professor Willow Bot
             # provide the details.
             await message.channel.send(next_stop.place.name)
+
         except IndexError:
             await message.channel.send(
-                'Congratulations! Route complete! :first_place:')
+                'Congratulations — route **complete**! :first_place:\n'
+                '_Feel free to `!add` additional stops!_\n')
+
+    async def _on_add_command(self, message, command, args):
+        if not await self._message_author_is_leader(message):
+            await message.channel.send(
+                ':warning: Only caravan leaders are allowed to modify the '
+                'route!')
+            return
+
+        pin = await self._get_route_pin(message.channel)
+
+        append = command == 'append' or pin.mode == pins.CaravanMode.PLANNING
+
+        try:
+            route = pins.get_route(
+                route=f'- {args}' if args else message.content,
+                all_places=self.gyms,
+                fuzzy=True)
+
+            pin.add_route(route=route, append=append)
+
+        except pins.EmptyRouteException:
+            await message.channel.send(
+                f'Usages:\n'
+                f'```\n'
+                f'!{command} <gym-name>\n'
+                f'\n'
+                f'!{command}\n'
+                f'- <gym-name>\n'
+                f'- <gym-name>\n'
+                f'- ...\n'
+                f'```')
+            return
+
+        await pin.flush()
+        await message.channel.send(
+            'Added {} stop{} to the route!'.format(
+                len(route), '' if len(route) == 1 else 's'))
+
+        if not append and pins.CaravanMode.ACTIVE:
+            await message.channel.send(pin.remaining_route[0].place.name)
 
     async def _init_channel(self, channel):
         if not isinstance(channel, discord.TextChannel):
@@ -282,6 +339,23 @@ async def pin_message(message):
     await message.channel._state.http.pin_message(
         channel_id=message.channel.id,
         message_id=message.id)
+
+
+def get_route_statistics_message(stats):
+    def gen_msg():
+        yield 'Visited **{}** gym{}'.format(
+            stats.stops_visited,
+            '' if stats.stops_visited == 1 else 's')
+        if stats.stops_skipped:
+            yield 'skipped **{}** gym{}'.format(
+                stats.stops_skipped,
+                '' if stats.stops_skipped == 1 else 's')
+        if stats.stops_remaining:
+            yield '**{}** gym{} unvisited'.format(
+                stats.stops_remaining,
+                '' if stats.stops_remaining == 1 else 's')
+
+    return '_{}._'.format(natural_language.join(gen_msg()))
 
 
 def main():
