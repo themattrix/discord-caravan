@@ -67,9 +67,3 @@ Set up your development environment:
 - [ ] notify members one hour prior to the caravan starting of the start time and starting location
 - [ ] automatically start/stop the caravan at the expected times
 - [ ] Docker Compose runner
-
-
-### Notes
-
-Each Discord message has a character limit of 2000, which likely means the per-channel "pinned message" will have to be
-"pinned messages". They should appear in a logical order when viewing the pins.

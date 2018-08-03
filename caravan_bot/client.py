@@ -392,11 +392,18 @@ class CaravanClient(discord.Client):
         if not is_caravan_channel(channel):
             return  # not a caravan channel
 
+        if not channel.guild:
+            return  # possibly a direct message from someone
+
         if not self.server_re.match(channel.guild.name):
             return  # does not match given server name pattern
 
         if not self.channel_re.match(channel.name):
             return  # does not match given channel name pattern
+
+        if self.user not in channel.members:
+            log.info(f'Not a member of: {channel.guild.name} - {channel.name}')
+            return  # bot is not a member of this channel
 
         try:
             self.caravan_pins[channel] = await self._get_pins(channel)
@@ -453,7 +460,7 @@ class CaravanClient(discord.Client):
             '' if len(self.caravan_pins) == 1 else 's',
             '\n'.join(
                 f'  {g[0].guild.name}\n' + '\n'.join(
-                    f'  → {c.name}' for c in g)
+                    f'    → {c.name}' for c in g)
                 for g in it))
 
 
