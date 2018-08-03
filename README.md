@@ -7,8 +7,29 @@ A [Discord](https://discordapp.com/) bot 🤖 for managing [Pokémon GO](https:/
 
 ## Usage
 
+Set your secret discord bot token, then run `caravan_bot` via
+[pipenv](https://docs.pipenv.org/).
+
     export DISCORD_BOT_TOKEN=YOUR_SECRET_TOKEN
-    pipenv run python -m caravan_bot <gyms_json_path>
+    pipenv run python -m caravan_bot <ARGS>
+
+All options:
+
+```
+  caravan_bot --gyms=JSON [--server-filter=REGEX] [--channel-filter=REGEX]
+  caravan_bot (-h | --help)
+  caravan_bot --version
+
+Options:
+  -h --help                 Show this screen.
+  --version                 Show version.
+  --gyms=JSON               JSON file containing gyms names, coordinates, and
+                            optional aliases.
+  --server-filter=REGEX     Restrict bot to servers matching this pattern
+                            [default: .*].
+  --channel-filter=REGEX    Restrict bot to channels matching this pattern
+                            [default: .*caravan.*].
+``````
 
 
 ## Contributing
