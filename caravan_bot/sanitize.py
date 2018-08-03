@@ -16,7 +16,7 @@ ROUTE_LINE = re.compile(
     re.MULTILINE | re.IGNORECASE)
 
 USER_ID_PATTERN = re.compile(
-    r'<@(?P<id>\d+)>')
+    r'<@!?(?P<id>\d+)>')
 
 QUOTES_AND_WHITESPACE = '\'"“‟‘‛”’"❛❜❝❞' + string.whitespace
 

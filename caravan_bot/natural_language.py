@@ -11,4 +11,4 @@ def join(seq: Iterable[str]):
     if len(seq) == 2:
         return f'{seq[0]} and {seq[1]}'
 
-    return ', '.join(seq[:-1]) + f' and {seq[-1]}'
+    return ', '.join(seq[:-1]) + f', and {seq[-1]}'

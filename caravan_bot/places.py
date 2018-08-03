@@ -16,6 +16,10 @@ class Place:
     name: str
     location: str
 
+    @property
+    def maps_link(self):
+        return f'https://maps.google.com/?q={self.location}'
+
 
 class Places:
     @classmethod

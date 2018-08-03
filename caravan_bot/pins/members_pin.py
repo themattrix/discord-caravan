@@ -49,7 +49,7 @@ class MembersPin(base_pin.BasePin):
     def leaders_header_string(self):
         return '**Caravan Leader{}**{}'.format(
             '' if len(self.leaders) == 1 else 's',
-            '' if not self.leaders else ' — _set with `!leaders`_')
+            '' if self.leaders else ' — _set with `!leaders`_')
 
     @property
     def sorted_leaders(self):

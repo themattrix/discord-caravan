@@ -257,7 +257,7 @@ class RoutePin(base_pin.BasePin):
 
     @property
     def route_header_string(self):
-        return '**Route**' + '' if self.route else ' — _set with `!route`_'
+        return '**Route**' + ('' if self.route else ' — _set with `!route`_')
 
     @property
     def route_string(self):
@@ -279,17 +279,23 @@ class RoutePin(base_pin.BasePin):
     def title(self):
         if self.mode == CaravanMode.COMPLETED:
             return 'Caravan complete!'
-        if self.remaining_route:
-            return 'Click here for route directions!'
-        return 'Please set a route!'
+        if not self.route:
+            return 'Please set a route!'
+        remaining = self.remaining_route
+        if remaining:
+            return 'Click here for {}route directions!'.format(
+                'remaining ' if len(remaining) < len(self.route) else '')
 
     @property
     def content_and_embed(self):
+        url = None
+        if self.remaining_route and self.mode != CaravanMode.COMPLETED:
+            url = self.map_link
         return {
             'content': self.title_string,
             'embed': discord.Embed(
                 title=self.title,
-                url=self.map_link,
+                url=url,
                 description=(
                     f'\n'
                     f'{self.status_string}\n'
