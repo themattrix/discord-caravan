@@ -11,7 +11,7 @@ class PlaceNotFoundException(ValueError):
     """Raised when a given place was not found."""
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class Place:
     name: str
     location: str

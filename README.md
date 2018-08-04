@@ -76,7 +76,7 @@ Set up your development environment:
 - [X] allow leaders to add a new next stop while in active mode
 - [X] cache pins
 - [X] add help
-- [ ] disallow duplicate stops
+- [X] disallow duplicate stops
 - [ ] `!remove`/`!delete` command to skip gym by name
 - [ ] allow anyone to `!join` the caravan, optionally with guests
 - [ ] warn when the attendance nears 20 for any individual gym

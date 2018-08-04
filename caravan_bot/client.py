@@ -9,6 +9,7 @@ from .pins import route_pin
 from .pins import members_pin
 from . import natural_language
 from . import pins
+from . import route
 from . import sanitize
 
 import discord
@@ -203,36 +204,36 @@ class CaravanClient(discord.Client):
         is_leader = self._message_author_is_leader(message)
 
         try:
-            route = route_pin.get_route(
-                route=message.content,
+            new_route = route.Route.from_message(
+                content=message.content,
                 all_places=self.gyms,
                 fuzzy=True)
-            gyms_not_found = ()
-        except route_pin.UnknownRouteLocations as e:
-            route = ()
-            gyms_not_found = e.unknown_names
+            invalid_route = None
 
-        if not is_leader and (route or gyms_not_found):
+        except route.InvalidRouteException as e:
+            new_route = None
+            invalid_route = e
+
+        if not is_leader and (new_route.stops or invalid_route):
             await message.channel.send(
                 ':warning: Only caravan leaders are allowed to set a route! '
                 'You may query the route with `!route`.')
             return
 
-        if gyms_not_found:
-            await message.channel.send(
-                ':warning: Failed to find the following gym{}: {}'.format(
-                    '' if len(gyms_not_found) == 1 else 's',
-                    ', '.join(f'"{g}"' for g in gyms_not_found)))
+        if invalid_route:
+            await warn_about_invalid_route(
+                invalid_route=invalid_route,
+                channel=message.channel)
             return
 
         pin = self.caravan_pins[message.channel].route
 
-        if route:
-            pin.reroute(route=route)
+        if new_route:
+            pin.reroute(route=new_route)
 
             await pin.flush()
             await message.channel.send(
-                f'New route pinned! ({len(route)} stops)\n'
+                f':map: New route pinned! ({len(new_route.stops)} stops)\n'
                 f'_You may change it again with `!route` or add stops with '
                 f'`!add`._\n'
                 f'_When it\'s time, start the caravan with `!start`._')
@@ -276,7 +277,7 @@ class CaravanClient(discord.Client):
 
         if command == 'start':
             try:
-                next_place = pin.remaining_route[0].place
+                next_place = pin.route.remaining[0].place
                 await message.channel.send(
                     '_Advance the caravan with `!next` or `!skip [reason]`. '
                     'You may `!stop` or `!reset` the caravan at any time. '
@@ -291,7 +292,7 @@ class CaravanClient(discord.Client):
 
         elif command == 'stop':
             await message.channel.send(get_route_statistics_message(
-                stats=pin.route_statistics))
+                stats=pin.route.statistics))
 
     async def _on_advance_command(self, message, command, args):
         if not self._message_author_is_leader(message):
@@ -315,7 +316,7 @@ class CaravanClient(discord.Client):
             else:
                 pin.skip(reason=args)
 
-        except route_pin.RouteExhausted:
+        except route.RouteExhausted:
             await message.channel.send(
                 ':warning: Can\'t advance the caravan; no more stops! _Try '
                 'adding stops with `!add`._')
@@ -324,7 +325,7 @@ class CaravanClient(discord.Client):
         await pin.flush()
 
         try:
-            next_place = pin.remaining_route[0].place
+            next_place = pin.route.remaining[0].place
             await message.channel.send(
                 f'Next up: **{next_place.name}**\n'
                 f'{next_place.maps_link}')
@@ -347,14 +348,14 @@ class CaravanClient(discord.Client):
             command == 'append' or pin.mode == route_pin.CaravanMode.PLANNING)
 
         try:
-            route = route_pin.get_route(
-                route=f'- {args}' if args else message.content,
+            added_route = route.Route.from_message(
+                content=f'- {args}' if args else message.content,
                 all_places=self.gyms,
                 fuzzy=True)
 
-            pin.add_route(route=route, append=append)
+            pin.add_route(route=added_route, append=append)
 
-        except route_pin.EmptyRouteException:
+        except route.EmptyRouteException:
             await message.channel.send(
                 f'Usages:\n'
                 f'```\n'
@@ -367,20 +368,20 @@ class CaravanClient(discord.Client):
                 f'```')
             return
 
-        except route_pin.UnknownRouteLocations as e:
-            await message.channel.send(
-                ':warning: Failed to find the following gym{}: {}'.format(
-                    '' if len(e.unknown_names) == 1 else 's',
-                    ', '.join(f'"{g}"' for g in e.unknown_names)))
+        except route.InvalidRouteException as e:
+            await warn_about_invalid_route(
+                invalid_route=e,
+                channel=message.channel)
             return
 
         await pin.flush()
         await message.channel.send(
-            'Added {} stop{} to the route!'.format(
-                len(route), '' if len(route) == 1 else 's'))
+            ':map: Added {} stop{} to the route!'.format(
+                len(added_route.stops),
+                '' if len(added_route.stops) == 1 else 's'))
 
         if not append and route_pin.CaravanMode.ACTIVE:
-            next_place = pin.remaining_route[0].place
+            next_place = pin.route.remaining[0].place
             await message.channel.send(
                 f'Next up: **{next_place.name}**\n'
                 f'{next_place.maps_link}')
@@ -426,23 +427,35 @@ class CaravanClient(discord.Client):
         yield from it
 
     async def _get_pins(self, channel) -> pins.Pins:
-        members, route = None, None
+        existing_members_pin, existing_route_pin = None, None
 
         for p in await channel.pins():
             if p.author != self.user:
                 continue
+
             if 'Leader' in p.content:
-                members = members_pin.MembersPin.from_message(
-                    message=p,
-                    gen_users=self._ids_to_users)
+                try:
+                    existing_members_pin = members_pin.MembersPin.from_message(
+                        message=p,
+                        gen_users=self._ids_to_users)
+                except members_pin.MembersPinFormatException as e:
+                    log.error(f'{channel.guild.name} - {channel.name}: {e}')
             else:
-                route = route_pin.RoutePin.from_message(
-                    message=p,
-                    all_places=self.gyms)
+                try:
+                    existing_route_pin = route_pin.RoutePin.from_message(
+                        message=p,
+                        all_places=self.gyms)
+                except route_pin.RoutePinFormatException as e:
+                    log.error(f'{channel.guild.name} - {channel.name}: {e}')
+                except route.InvalidRouteException as e:
+                    log.error(f'{channel.guild.name} - {channel.name}: ' + (
+                        f'invalid stops(s): {e.unknowns}, '
+                        f'duplicate stop(s): {e.duplicates}'))
 
         return pins.Pins(
-            route=route or route_pin.RoutePin(channel_name=channel.name),
-            members=members or members_pin.MembersPin())
+            route=existing_route_pin or (
+                route_pin.RoutePin(channel_name=channel.name)),
+            members=existing_members_pin or members_pin.MembersPin())
 
     def _get_all_channels_message(self) -> str:
         if not self.caravan_pins:
@@ -483,3 +496,13 @@ def get_route_statistics_message(stats):
                 '' if stats.stops_remaining == 1 else 's')
 
     return '_{}._'.format(natural_language.join(gen_msg()))
+
+
+async def warn_about_invalid_route(
+        invalid_route: route.InvalidRouteException,
+        channel: discord.TextChannel):
+
+    if invalid_route.unknowns:
+        await channel.send(f':warning: {invalid_route.unknowns_str()}')
+    if invalid_route.duplicates:
+        await channel.send(f':warning: {invalid_route.duplicates_str()}')
