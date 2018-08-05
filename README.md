@@ -77,13 +77,15 @@ Set up your development environment:
 - [X] cache pins
 - [X] add help
 - [X] disallow duplicate stops
-- [ ] `!remove`/`!delete` command to skip gym by name
+- [X] `!remove`/`!delete` command to skip gym by name
 - [ ] allow anyone to `!join` the caravan, optionally with guests
+- [ ] allow members to `!leave` the caravan
 - [ ] warn when the attendance nears 20 for any individual gym
 - [ ] allow caravan members to restrict their attendance to partial routes
 - [ ] when the caravan is active, allow members to signal `!here`
 - [ ] allow leaders to `!lobby`
 - [ ] allow members to query the `!here` statuses with `!list`
+- [ ] take gym distance into consideration when ranking gym name matches
 - [ ] allow leaders to register start/stop times
 - [ ] notify members one hour prior to the caravan starting of the start time and starting location
 - [ ] automatically start/stop the caravan at the expected times

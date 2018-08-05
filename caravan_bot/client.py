@@ -25,7 +25,8 @@ ALL_COMMANDS = frozenset((
     'route',
     'start', 'stop', 'done', 'resume', 'reset',
     'next', 'skip',
-    'add', 'append'))
+    'add', 'append',
+    'remove', 'delete'))
 
 
 class CaravanClient(discord.Client):
@@ -106,6 +107,12 @@ class CaravanClient(discord.Client):
                 command=command,
                 args=args)
 
+        elif command in {'remove', 'delete'}:
+            await self._on_remove_command(
+                message=message,
+                command=command,
+                args=args)
+
     async def _on_help_command(self, message):
         pin = self.caravan_pins[message.channel].members
 
@@ -135,8 +142,8 @@ class CaravanClient(discord.Client):
                 'Stop the caravan: `!stop` (or `!done`)\n'
                 'Stop _and_ reset the caravan: `!reset`\n'
                 'Advance the caravan: `!next`\n'
-                'Skip the next stop: `!skip [reason]`\n'
-                'Add next stop(s) (when the caravan is in progress): '
+                'Skip the next gym: `!skip [reason]`\n'
+                'Add next gym(s) (when the caravan is in progress): '
                 '`!add <gym_name>` or\n'
                 '```\n'
                 '!add\n'
@@ -144,7 +151,7 @@ class CaravanClient(discord.Client):
                 '- <gym_name>\n'
                 '- ...\n'
                 '```\n'
-                'Add stop(s) to the end of the route: '
+                'Add gym(s) to the end of the route: '
                 '`!append <gym_name>` or\n'
                 '```\n'
                 '!append\n'
@@ -216,8 +223,9 @@ class CaravanClient(discord.Client):
 
         if not is_leader and (new_route.stops or invalid_route):
             await message.channel.send(
-                ':warning: Only caravan leaders are allowed to set a route! '
-                'You may query the route with `!route`.')
+                ':warning: Only caravan leaders are allowed to set a route!\n'
+                '_You may query the route with `!route`. It\'s also pinned to '
+                'this channel._')
             return
 
         if invalid_route:
@@ -233,7 +241,7 @@ class CaravanClient(discord.Client):
 
             await pin.flush()
             await message.channel.send(
-                f':map: New route pinned! ({len(new_route.stops)} stops)\n'
+                f':map: New route pinned! ({len(new_route.stops)} gyms)\n'
                 f'_You may change it again with `!route` or add stops with '
                 f'`!add`._\n'
                 f'_When it\'s time, start the caravan with `!start`._')
@@ -288,7 +296,7 @@ class CaravanClient(discord.Client):
             except IndexError:
                 await message.channel.send(
                     ':warning: The caravan is active but no route is set!\n'
-                    '_Set a route with `!route` or add stops with `!add`._')
+                    '_Set a route with `!route` or add gyms with `!add`._')
 
         elif command == 'stop':
             await message.channel.send(get_route_statistics_message(
@@ -318,8 +326,8 @@ class CaravanClient(discord.Client):
 
         except route.RouteExhausted:
             await message.channel.send(
-                ':warning: Can\'t advance the caravan; no more stops! _Try '
-                'adding stops with `!add`._')
+                ':warning: Can\'t advance the caravan; no more gyms! _Try '
+                'adding gyms with `!add`._')
             return
 
         await pin.flush()
@@ -333,7 +341,7 @@ class CaravanClient(discord.Client):
         except IndexError:
             await message.channel.send(
                 'Congratulations — **route complete**! :first_place:\n'
-                '_Feel free to `!add` additional stops!_\n')
+                '_Feel free to `!add` additional gyms!_\n')
 
     async def _on_add_command(self, message, command, args):
         if not self._message_author_is_leader(message):
@@ -376,15 +384,82 @@ class CaravanClient(discord.Client):
 
         await pin.flush()
         await message.channel.send(
-            ':map: Added {} stop{} to the route!'.format(
+            ':map: Added {} gym{} to the route!'.format(
                 len(added_route.stops),
                 '' if len(added_route.stops) == 1 else 's'))
 
-        if not append and route_pin.CaravanMode.ACTIVE:
+        if not append and pin.mode == route_pin.CaravanMode.ACTIVE:
             next_place = pin.route.remaining[0].place
             await message.channel.send(
                 f'Next up: **{next_place.name}**\n'
                 f'{next_place.maps_link}')
+
+    async def _on_remove_command(self, message, command, args):
+        if not self._message_author_is_leader(message):
+            await message.channel.send(
+                ':warning: Only caravan leaders are allowed to modify the '
+                'route!')
+            return
+
+        pin = self.caravan_pins[message.channel].route
+
+        try:
+            old_next_place = pin.route.remaining[0].place
+        except IndexError:
+            old_next_place = None
+
+        try:
+            to_remove = route.Route.from_message(
+                content=f'- {args}' if args else message.content,
+                all_places=self.gyms,
+                fuzzy=True)
+
+            stops_removed_len = pin.remove_stops(route=to_remove)
+
+        except route.EmptyRouteException:
+            await message.channel.send(
+                f'Usages:\n'
+                f'```\n'
+                f'!{command} <gym-name>\n'
+                f'\n'
+                f'!{command}\n'
+                f'- <gym-name>\n'
+                f'- <gym-name>\n'
+                f'- ...\n'
+                f'```')
+            return
+
+        except route.InvalidRouteException as e:
+            await warn_about_invalid_route(
+                invalid_route=e,
+                channel=message.channel)
+            return
+
+        except route.RouteUnchangedException:
+            await message.channel.send(
+                ':warning: No gyms removed! The supplied gym(s) didn\'t match '
+                'any in the route.')
+            return
+
+        await pin.flush()
+        await message.channel.send(
+            ':map: Removed {} gym{} from the route!'.format(
+                stops_removed_len,
+                '' if stops_removed_len == 1 else 's'))
+
+        if old_next_place and pin.mode == route_pin.CaravanMode.ACTIVE:
+            try:
+                new_next_place = pin.route.remaining[0].place
+                if old_next_place != new_next_place:
+                    # The old next place was just deleted. Make sure to inform
+                    # the caravan members of the change!
+                    await message.channel.send(
+                        f'Next up: **{new_next_place.name}**\n'
+                        f'{new_next_place.maps_link}')
+            except IndexError:
+                await message.channel.send(
+                    'Congratulations — **route complete**! :first_place:\n'
+                    '_Feel free to `!add` additional gyms!_\n')
 
     async def _init_channel(self, channel):
         if not isinstance(channel, discord.TextChannel):
@@ -449,8 +524,8 @@ class CaravanClient(discord.Client):
                     log.error(f'{channel.guild.name} - {channel.name}: {e}')
                 except route.InvalidRouteException as e:
                     log.error(f'{channel.guild.name} - {channel.name}: ' + (
-                        f'invalid stops(s): {e.unknowns}, '
-                        f'duplicate stop(s): {e.duplicates}'))
+                        f'invalid gym(s): {e.unknowns}, '
+                        f'duplicate gym(s): {e.duplicates}'))
 
         return pins.Pins(
             route=existing_route_pin or (

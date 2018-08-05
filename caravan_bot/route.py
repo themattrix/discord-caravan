@@ -12,6 +12,10 @@ class EmptyRouteException(Exception):
     """Raised when a route was expected to be non-empty."""
 
 
+class RouteUnchangedException(Exception):
+    """Raised when the route was expected to change, but didn't."""
+
+
 class InvalidRouteException(Exception):
     """Raised when the route contains invalid names or duplicate stops."""
 
@@ -104,12 +108,27 @@ class Route:
         self.stops = (
             self.stops[:insert_at] + route.stops + self.stops[insert_at:])
 
+    def remove(self, route: 'Route') -> int:
+        if not route.stops:
+            raise EmptyRouteException()
+
+        stops = tuple(s for s in self.stops if s not in frozenset(route.stops))
+        removed_len = len(self.stops) - len(stops)
+
+        if removed_len == 0:
+            raise RouteUnchangedException()
+
+        self.stops = stops
+
+        return removed_len
+
     @property
     def first_unvisited_index(self) -> int:
+        i = 0
         for i, s in enumerate(self.stops):
             if not s.visited:
                 return i
-        return 0
+        return i + 1
 
     @property
     def remaining(self) -> Tuple['RouteStop', ...]:

@@ -136,6 +136,9 @@ class RoutePin(base_pin.BasePin):
     def add_route(self, route: Route, append: bool):
         self.route.add(route=route, append=append)
 
+    def remove_stops(self, route: Route) -> int:
+        return self.route.remove(route=route)
+
     @property
     def title_string(self):
         return f':blue_car: __**{self.channel_name}**__ :red_car:'
