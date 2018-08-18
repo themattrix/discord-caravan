@@ -61,7 +61,7 @@ Set up your development environment:
 - bot state should be stored purely in Discord
 
 
-### TODO
+### Roadmap
 
 - [X] skeleton Discord bot project
 - [X] at bot startup, pin a welcome message to each caravan channel
@@ -78,9 +78,9 @@ Set up your development environment:
 - [X] add help
 - [X] disallow duplicate stops
 - [X] `!remove`/`!delete` command to skip gym by name
-- [ ] allow anyone to `!join` the caravan, optionally with guests
-- [ ] allow members to `!leave` the caravan
-- [ ] warn when the attendance nears 20 for any individual gym
+- [X] allow anyone to `!join` the caravan, optionally with guests
+- [X] allow members to `!leave` the caravan
+- [X] warn when the attendance nears 20 for any individual gym
 - [ ] allow caravan members to restrict their attendance to partial routes
 - [ ] when the caravan is active, allow members to signal `!here`
 - [ ] allow leaders to `!lobby`

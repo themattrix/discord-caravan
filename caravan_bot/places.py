@@ -2,6 +2,8 @@ import dataclasses
 import itertools
 import json
 
+from typing import Dict
+
 import fuzzywuzzy.process
 
 from .log import log
@@ -21,7 +23,14 @@ class Place:
         return f'https://maps.google.com/?q={self.location}'
 
 
+@dataclasses.dataclass
 class Places:
+    places: Dict[str, Place]
+    aliases: Dict[str, str]
+
+    def __post_init__(self):
+        self.__choices = tuple(itertools.chain(self.places, self.aliases))
+
     @classmethod
     def from_json(cls, path):
         with path.open() as f:
@@ -31,7 +40,7 @@ class Places:
 
         return cls(
             places={
-                p: v['location']
+                p: Place(name=p, location=v['location'])
                 for p, v in raw_places.items()
             },
             aliases={
@@ -40,17 +49,12 @@ class Places:
                 for a in v.get('aliases', ())
             })
 
-    def __init__(self, places, aliases):
-        self.places = places
-        self.aliases = aliases
-        self.__choices = tuple(itertools.chain(places, aliases))
-
     def get(self, name: str, fuzzy: bool) -> Place:
         return self.get_fuzzy(name) if fuzzy else self.get_exact(name)
 
     def get_exact(self, name: str) -> Place:
         try:
-            return Place(name=name, location=self.places[name])
+            return self.places[name]
         except KeyError:
             raise PlaceNotFoundException(name)
 
@@ -70,6 +74,4 @@ class Places:
         if score < 80:
             raise PlaceNotFoundException(fuzzy_name)
 
-        real_name = self.aliases.get(matched_name, matched_name)
-
-        return Place(name=real_name, location=self.places[real_name])
+        return self.places[self.aliases.get(matched_name, matched_name)]

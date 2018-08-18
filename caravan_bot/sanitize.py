@@ -22,7 +22,10 @@ QUOTES_AND_WHITESPACE = '\'"“‟‘‛”’"❛❜❝❞' + string.whitespace
 
 
 def clean_route(route: str):
-    yield from (RouteNode.from_match(m) for m in ROUTE_LINE.finditer(route))
+    it = ROUTE_LINE.finditer(route)
+    it = (RouteNode.from_match(m) for m in it)
+    it = (i for i in it if i.name)
+    yield from it
 
 
 @dataclasses.dataclass

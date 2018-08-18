@@ -1,73 +1,89 @@
-import re
+import dataclasses
 
-from typing import Callable, Iterable, Optional
+from typing import Callable, Dict
 
 import discord
 
+from .. import caravan_model
 from .. import natural_language
-from .. import sanitize
 from . import base_pin
 
-MEMBERS_PATTERN = re.compile(
-    r'.*Leader.*\n'
-    r'(?:'
-    r'  _No.*|'           # no leaders set
-    r'  (?P<leaders>.*)'  # leaders set 
-    r')',
-    re.IGNORECASE | re.VERBOSE)
 
-
-class MembersPinFormatException(Exception):
+class InvalidMembersPinFormat(Exception):
     """Raised if the message cannot be parsed."""
 
 
+CARAVAN_SIZE_WARNING_THRESHOLD = 16
+
+
+@dataclasses.dataclass
 class MembersPin(base_pin.BasePin):
-    @classmethod
-    def from_message(cls, message: discord.Message, gen_users: Callable):
-        match = MEMBERS_PATTERN.search(message.content)
-        if not match:
-            raise MembersPinFormatException('Unrecognized members format!')
+    update_for = frozenset({
+        caravan_model.LeaderUpdateReceipt,
+        caravan_model.MemberUpdateReceipt,
+    })
 
-        leaders_string = match.group('leaders') or ''
+    def content_and_embed(self, model: caravan_model.CaravanModel) -> Dict:
+        return content_and_embed(model)
 
-        return cls(
-            leaders=gen_users(sanitize.gen_user_ids(leaders_string)),
-            message=message)
 
-    def __init__(
-            self,
-            leaders: Iterable[discord.User] = (),
-            message: Optional[discord.Message] = None):
-        super().__init__()
-        self.leaders = frozenset(leaders)
-        self.message = message
+def populate_model(
+        message: discord.Message,
+        model: caravan_model.CaravanModel,
+        gen_users: Callable,
+        gen_members: Callable):
 
-    def update_leaders(self, leaders: Iterable[discord.User]):
-        self.leaders = frozenset(leaders)
+    if not message.embeds:
+        raise InvalidMembersPinFormat('Missing embeds!')
 
-    @property
-    def leaders_header_string(self):
-        return '**Caravan Leader{}**{}'.format(
-            '' if len(self.leaders) == 1 else 's',
-            '' if self.leaders else ' — _set with `!leaders`_')
+    if len(message.embeds) != 1:
+        raise InvalidMembersPinFormat(
+            f'Expected 1 embed but found {len(message.embeds)}.')
 
-    @property
-    def sorted_leaders(self):
-        return sorted(self.leaders, key=lambda u: u.id)
+    embed = message.embeds[0]
 
-    @property
-    def leaders_list_string(self):
-        return natural_language.join(u.mention for u in self.sorted_leaders)
+    if len(embed.fields) != 2:
+        raise InvalidMembersPinFormat(
+            f'Expected 2 embed fields but found {len(embed.fields)}.')
 
-    @property
-    def leaders_string(self):
-        return '_No leaders set!_' if not self.leaders else (
-            self.leaders_list_string)
+    leader_field, member_field = embed.fields
 
-    @property
-    def content_and_embed(self):
-        return {
-            'content': (
-                f'{self.leaders_header_string}\n'
-                f'{self.leaders_string}'),
-        }
+    model.leaders = frozenset(gen_users(leader_field.value))
+    model.members = {m.user: m.guests for m in gen_members(member_field.value)}
+
+
+def content_and_embed(model: caravan_model.CaravanModel) -> Dict:
+    p = natural_language.pluralize
+    j = natural_language.join
+
+    embed = discord.Embed(title='Caravan Members')
+
+    embed.add_field(
+        name=f'{p("Leader", model.leaders)} :crown:',
+        value=(
+            '_No leaders set! An admin may set the leader(s) with `!leaders`._'
+            if not model.leaders else j(
+                u.mention for u in sorted(model.leaders, key=lambda u: u.id))),
+        inline=False)
+
+    embed.add_field(
+        name=f'{p("Member", model.members)} :busts_in_silhouette:',
+        value=(
+            '_No members! Be the first to `!join`._'
+            if not model.members else j(
+                format_member(u, model.members[u])
+                for u in sorted(model.members, key=lambda u: u.id))),
+        inline=False)
+
+    return {
+        'content': (
+            None if len(model.members) <= CARAVAN_SIZE_WARNING_THRESHOLD else (
+                f'_Nearing a full caravan ({len(model.members)} members)! '
+                f'Consider splitting this caravan into multiples._ '
+                f':arrow_up_down:')),
+        'embed': embed,
+    }
+
+
+def format_member(user: discord.User, guests: int) -> str:
+    return user.mention if not guests else f'{user.mention} +{guests}'

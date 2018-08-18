@@ -1,27 +1,41 @@
 import abc
+import dataclasses
+
+from typing import Optional, Dict
 
 import discord
 
+from .. import caravan_model
 
+
+@dataclasses.dataclass
 class BasePin(abc.ABC):
-    def __init__(self):
-        self.message = None
+    message: Optional[discord.Message]
 
     @property
     @abc.abstractmethod
-    def content_and_embed(self):
+    def update_for(self):
         pass
 
-    async def ensure_post(self, channel: discord.TextChannel):
-        if not self.message:
-            self.message = await channel.send(**self.content_and_embed)
+    @abc.abstractmethod
+    def content_and_embed(self, model: caravan_model.CaravanModel) -> Dict:
+        pass
 
-    async def ensure_pin(self):
+    async def update(self, receipt, model: caravan_model.CaravanModel):
+        if not any(isinstance(receipt, t) for t in self.update_for):
+            return
+        await self.message.edit(**self.content_and_embed(model))
+
+    async def ensure_post(
+            self,
+            channel: discord.TextChannel,
+            model: caravan_model.CaravanModel):
+        if self.message is None:
+            self.message = await channel.send(**self.content_and_embed(model))
+
+    async def ensure_pinned(self):
         if not self.message.pinned:
             await pin_message(self.message)
-
-    async def flush(self):
-        await self.message.edit(**self.content_and_embed)
 
 
 async def pin_message(message):
