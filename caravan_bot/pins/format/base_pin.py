@@ -5,12 +5,13 @@ from typing import Optional, Dict
 
 import discord
 
-from .. import caravan_model
+from ... import caravan_model
 
 
 @dataclasses.dataclass
 class BasePin(abc.ABC):
     message: Optional[discord.Message]
+    version: str = 'v1'
 
     @property
     @abc.abstractmethod

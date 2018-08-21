@@ -272,7 +272,7 @@ class CaravanModel:
         # Assign a new caravan route, keeping the existing stop properties
         # where possible.
         self.route = tuple(
-            old_stops.get(p, CaravanStop(p)) for p in new_places)
+            old_stops.get(p, CaravanStop(p)) for p in new_route)
 
         return RouteUpdateReceipt(
             channel=self.channel,
@@ -351,7 +351,7 @@ class CaravanModel:
             raise MissingPlacesException(missing_places=missing_places)
 
         old_route = self.route
-        self.route = tuple(s for s in self.route if s not in to_remove)
+        self.route = tuple(s for s in self.route if s.place not in to_remove)
 
         return RouteUpdateReceipt(
             channel=self.channel,
@@ -493,7 +493,10 @@ class CaravanModel:
         Raises a `ModeNotUpdated` if the mode did not change.
         """
         if self.mode == mode:
-            raise ModeNotUpdated()
+            raise ModeNotUpdated()  # already in the correct mode
+
+        if self.mode == CaravanMode.PLANNING and mode == CaravanMode.COMPLETED:
+            raise ModeNotUpdated()  # can't go from planning to completed
 
         receipt = ModeUpdateReceipt(
             channel=self.channel,

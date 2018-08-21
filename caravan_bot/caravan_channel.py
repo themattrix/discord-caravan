@@ -6,11 +6,9 @@ from typing import Callable, Iterable, Tuple, Optional
 import discord
 import inflection
 
-from .log import log
 from .roles import Role
-from .pins import base_pin
-from .pins import members_pin
-from .pins import route_pin
+from .pins import init_pins
+from .pins.format import base_pin
 from . import caravan_model
 from . import commands
 from . import members
@@ -40,56 +38,18 @@ class CaravanChannel:
             bot_user: discord.User
     ) -> 'CaravanChannel':
 
-        existing_route_pin, existing_members_pin = None, None
-
         # Create an empty model to be populated as the pins are parsed.
         model = caravan_model.CaravanModel(channel=channel)
-
-        for p in await channel.pins():
-            if p.author != bot_user:
-                continue
-
-            if p.content and ':red_car:' in p.content:
-                try:
-                    route_pin.populate_model(
-                        message=p,
-                        model=model,
-                        all_places=gyms)
-                except route_pin.InvalidRoutePinFormat as e:
-                    log.error(f'{channel.guild.name} - {channel.name}: {e}')
-                except route.UnknownPlaceNames as e:
-                    log.error(f'{channel.guild.name} - {channel.name}: ' + (
-                        f'invalid gym(s): {e.unknown_names}'))
-                else:
-                    existing_route_pin = p
-            else:
-                try:
-                    members_pin.populate_model(
-                        message=p,
-                        model=model,
-                        gen_users=functools.partial(
-                            members.gen_users, get_user),
-                        gen_members=functools.partial(
-                            members.gen_members, get_user))
-                except members_pin.InvalidMembersPinFormat as e:
-                    log.error(f'{channel.guild.name} - {channel.name}: {e}')
-                else:
-                    existing_members_pin = p
-
-        # noinspection PyArgumentList
-        pins = (
-            route_pin.RoutePin(message=existing_route_pin),
-            members_pin.MembersPin(message=existing_members_pin))
-
-        for p in pins:
-            await p.ensure_post(channel=channel, model=model)
-        for p in reversed(pins):
-            await p.ensure_pinned()
 
         return cls(
             channel=channel,
             model=model,
-            pins=pins,
+            pins=await init_pins(
+                model=model,
+                channel=channel,
+                bot_user=bot_user,
+                all_places=gyms,
+                get_user=get_user),
             get_user=get_user,
             gyms=gyms)
 
@@ -157,6 +117,9 @@ class CaravanChannel:
         usage='!{cmd} [command]'
     )
     async def _help(self, cmd_msg: commands.CommandMessage):
+        # TODO: role-dependant help, call out user
+        # TODO: "here's the help for your role(s) {roles}, {user}
+
         j = natural_language.join
 
         def roles(command):

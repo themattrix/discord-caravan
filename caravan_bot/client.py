@@ -1,11 +1,13 @@
 import contextlib
 import dataclasses
+import functools
 import itertools
 import re
 
 from typing import Dict
 
-from .log import log
+from .log import log, channel_log
+from .pins import exceptions
 from . import caravan_channel
 from . import commands
 from . import places
@@ -41,18 +43,17 @@ class CaravanClient(discord.Client):
     async def on_guild_channel_delete(self, channel):
         with contextlib.suppress(KeyError):
             self.channels.pop(channel)
-            log.info(
-                f'Removed caravan channel "{channel}" from server '
-                f'"{channel.guild.name}"')
+            channel_log(channel, 'INFO', 'Channel deleted.')
 
-    async def on_message(self, message):
+    async def on_message(self, message: discord.Message):
         if message.author == self.user:
             return  # don't respond to ourselves
 
         if message.channel not in self.channels:
             return  # only respond in caravan channels
 
-        log.info(f'From {message.author.name}: {message.content}')
+        c_log = functools.partial(channel_log, message.channel)
+        c_log('INFO', f'From {message.author.name}: {message.content}')
 
         try:
             cmd_msg = commands.CommandMessage.from_message(message)
@@ -61,14 +62,14 @@ class CaravanClient(discord.Client):
         except commands.CommandSuggestion as e:
             await message.channel.send(
                 f'Did you mean `!{e.suggested_command}`?')
-            log.info(
+            c_log('INFO', (
                 f'Suggesting "!{e.suggested_command}" (score: {e.score}) '
-                f'instead of "!{e.given_command}".')
+                f'instead of "!{e.given_command}".'))
             return
         else:
             await self.channels[message.channel].handle_command(cmd_msg)
 
-    async def _init_channel(self, channel):
+    async def _init_channel(self, channel: discord.TextChannel):
         if not isinstance(channel, discord.TextChannel):
             return  # not a text channel
 
@@ -81,9 +82,11 @@ class CaravanClient(discord.Client):
         if not self.channel_re.match(channel.name):
             return  # does not match given channel name pattern
 
+        c_log = functools.partial(channel_log, channel)
+
         if self.user not in channel.members:
-            log.info(f'Not a member of: {channel.guild.name} - {channel.name}')
-            return  # bot is not a member of this channel
+            c_log('WARNING', f'Bot is not a member of this channel.')
+            return
 
         try:
             self.channels[channel] = (
@@ -93,8 +96,9 @@ class CaravanClient(discord.Client):
                     get_user=self.get_user,
                     bot_user=self.user))
         except discord.errors.Forbidden as e:
-            log.error(
-                f'Forbidden in {channel.guild.name} - {channel.name}: {e}')
+            c_log('ERROR', f'Ignoring channel. Bot lacking permissions: {e}')
+        except exceptions.InvalidPinFormat as e:
+            c_log('ERROR', f'Ignoring channel. Invalid pin format: {e}')
 
     def _get_all_channels_message(self) -> str:
         if not self.channels:
