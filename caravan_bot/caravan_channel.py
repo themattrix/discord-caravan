@@ -117,36 +117,52 @@ class CaravanChannel:
         usage='!{cmd} [command]'
     )
     async def _help(self, cmd_msg: commands.CommandMessage):
-        # TODO: role-dependant help, call out user
-        # TODO: "here's the help for your role(s) {roles}, {user}
+        # noinspection PyProtectedMember
+        user_roles = frozenset(
+            self.model.gen_roles(cmd_msg.message.author._user))
 
         j = natural_language.join
 
-        def roles(command):
-            return j(sorted(r.name.casefold() for r in command.allowed_roles))
+        def roles(role_iter: Iterable[Role], markdown=lambda x: x):
+            it = (r.name.casefold() for r in role_iter)
+            it = sorted(it)
+            it = (markdown(r) for r in it)
+            return j(it)
 
-        def gen_help_lines():
-            if not cmd_msg.args:
+        if not cmd_msg.args:
+            def gen_help_lines():
                 for cmd in commands.unique_commands:
+                    if not cmd.allowed_roles & user_roles:
+                        continue  # only display help for user's roles
                     yield (
                         f'`!{cmd.preferred}` — '
-                        f'{cmd.description} _({roles(cmd)})_')
-            else:
+                        f'{cmd.description} _({roles(cmd.allowed_roles)})_')
+
+            display_roles = user_roles - frozenset({Role.ANYONE})
+
+            await self.info(
+                f'{cmd_msg.message.author.mention}, your caravan '
+                f'{"role is" if len(display_roles) == 1 else "roles are"} '
+                f'{roles(display_roles, lambda x: f"**{x}**")}. '
+                f'You may use the following commands:\n' +
+                '\n'.join(gen_help_lines()))
+        else:
+            def gen_help_lines():
                 try:
                     cmd = commands.commands[commands.get_command_name(
-                        cmd_msg.args.casefold())]
+                        cmd_msg.args.lstrip('!').casefold())]
                 except commands.NoSuchCommand:
                     pass  # do nothing; might be intended for another bot
                 except commands.CommandSuggestion as e:
                     yield f'_Did you mean `!help {e.suggested_command}`?_'
                 else:
                     # The "anyone" role is implied in this context.
-                    yield f'{cmd.description} _({roles(cmd)})_'
+                    yield f'{cmd.description} _({roles(cmd.allowed_roles)})_'
                     yield '```'
                     yield cmd.usage
                     yield '```'
 
-        await self.info('\n'.join(gen_help_lines()))
+            await self.info('\n'.join(gen_help_lines()))
 
     @commands.register(
         'leader', 'leaders',
