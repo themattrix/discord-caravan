@@ -6,6 +6,7 @@ from typing import Dict
 import pytest
 
 from .. import caravan_model as cm
+from .. import places
 
 
 # noinspection PyArgumentList
@@ -71,6 +72,54 @@ def test_leadership():
 
     with pytest.raises(cm.LeadersNotUpdated):
         c.model.set_leaders(leaders=())
+
+
+# noinspection PyArgumentList
+def test_route():
+    c = Caravan()
+
+    def p(name: str):
+        return places.Place(name=name, location=f'location({name})')
+
+    def set_and_validate(new_route, expected_receipt):
+        actual_receipt = c.model.set_route(new_route=new_route)
+        assert actual_receipt == expected_receipt
+        assert tuple(s.place for s in c.model.route) == new_route
+
+    set_and_validate(
+        new_route=(p('a'), p('b'), p('c')),
+        expected_receipt=cm.RouteUpdateReceipt(
+            channel=c.model.channel,
+            places_added=frozenset({p('a'), p('b'), p('c')}),
+            places_removed=frozenset(),
+            old_route=(),
+            new_route=(p('a'), p('b'), p('c')),
+            mode=c.model.mode,
+            next_place=p('a'),
+            appended=None))
+
+    set_and_validate(
+        new_route=(p('b'), p('c'), p('d')),
+        expected_receipt=cm.RouteUpdateReceipt(
+            channel=c.model.channel,
+            places_added=frozenset({p('d')}),
+            places_removed=frozenset({p('a')}),
+            old_route=(p('a'), p('b'), p('c')),
+            new_route=(p('b'), p('c'), p('d')),
+            mode=c.model.mode,
+            next_place=p('b'),
+            appended=None))
+
+    with pytest.raises(cm.RouteNotUpdated):
+        c.model.set_route(new_route=(p('b'), p('c'), p('d')))
+
+    with pytest.raises(cm.EmptyRouteException):
+        c.model.set_route(new_route=())
+
+    with pytest.raises(cm.DuplicatePlacesException) as exc_info:
+        c.model.set_route(new_route=(p('a'), p('b'), p('a'), p('b')))
+
+    assert exc_info.value.duplicate_places == frozenset({p('a'), p('b')})
 
 
 @pytest.mark.parametrize('a,b,expected_result', (

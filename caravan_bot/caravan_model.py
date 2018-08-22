@@ -112,7 +112,7 @@ class DuplicatePlacesException(Exception):
     """Raised when the given route contains the same place multiple times."""
 
     def __init__(self, duplicate_places: PlacesIter):
-        self.duplicate_places = tuple(duplicate_places)
+        self.duplicate_places = frozenset(duplicate_places)
 
 
 class MissingPlacesException(Exception):
