@@ -119,7 +119,7 @@ class MissingPlacesException(Exception):
     """Raised when some given places are not contained in the route."""
 
     def __init__(self, missing_places: PlacesIter):
-        self.missing_places = tuple(missing_places)
+        self.missing_places = frozenset(missing_places)
 
 
 class RouteNotUpdated(Exception):
@@ -315,6 +315,8 @@ class CaravanModel:
             len(self.route) if append else
             first_unvisited_index(self.route))
 
+        appended = insert_at >= len(self.route)
+
         self.route = (
             self.route[:insert_at] +
             tuple(CaravanStop(p) for p in route_slice) +
@@ -328,7 +330,7 @@ class CaravanModel:
             new_route=tuple(s.place for s in self.route),
             mode=self.mode,
             next_place=next_unvisited_place(self.route),
-            appended=append)
+            appended=appended)
 
     def remove_stops(self, places_iter: PlacesIter) -> RouteUpdateReceipt:
         """
@@ -515,10 +517,8 @@ class CaravanModel:
 @dataclasses.dataclass(frozen=True)
 class CaravanStop:
     place: places.Place
-    visited: bool = dataclasses.field(
-        default=False, compare=False)
-    skip_reason: Optional[str] = dataclasses.field(
-        default=None, compare=False)
+    visited: bool = dataclasses.field(default=False)
+    skip_reason: Optional[str] = dataclasses.field(default=None)
 
     def reset(self) -> 'CaravanStop':
         return self.__class__(place=self.place)
