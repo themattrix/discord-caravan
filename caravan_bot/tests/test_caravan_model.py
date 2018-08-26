@@ -1,7 +1,8 @@
+import collections
 import dataclasses
 import functools
 
-from typing import Dict
+from typing import Dict, DefaultDict
 
 import pytest
 
@@ -81,9 +82,10 @@ def test_route_set():
     def p(name: str):
         return places.Place(name=name, location=f'location({name})')
 
-    def set_and_validate(new_route, expected_receipt):
+    def set_and_validate(new_route, expected_receipt, expect_reordered):
         actual_receipt = c.model.set_route(new_route=new_route)
         assert actual_receipt == expected_receipt
+        assert actual_receipt.is_reorder_only == expect_reordered
         assert tuple(s.place for s in c.model.route) == new_route
 
     set_and_validate(
@@ -96,7 +98,8 @@ def test_route_set():
             new_route=(p('a'), p('b'), p('c')),
             mode=c.model.mode,
             next_place=p('a'),
-            appended=None))
+            appended=None),
+        expect_reordered=False)
 
     set_and_validate(
         new_route=(p('b'), p('c'), p('d')),
@@ -108,10 +111,24 @@ def test_route_set():
             new_route=(p('b'), p('c'), p('d')),
             mode=c.model.mode,
             next_place=p('b'),
-            appended=None))
+            appended=None),
+        expect_reordered=False)
+
+    set_and_validate(
+        new_route=(p('c'), p('d'), p('b')),
+        expected_receipt=cm.RouteUpdateReceipt(
+            channel=c.model.channel,
+            places_added=frozenset(),
+            places_removed=frozenset(),
+            old_route=(p('b'), p('c'), p('d')),
+            new_route=(p('c'), p('d'), p('b')),
+            mode=c.model.mode,
+            next_place=p('c'),
+            appended=None),
+        expect_reordered=True)
 
     with pytest.raises(cm.RouteNotUpdated):
-        c.model.set_route(new_route=(p('b'), p('c'), p('d')))
+        c.model.set_route(new_route=(p('c'), p('d'), p('b')))
 
     with pytest.raises(cm.EmptyRouteException):
         c.model.set_route(new_route=())
@@ -550,6 +567,147 @@ def test_mode_change():
             remaining=0))
 
 
+# noinspection PyArgumentList
+def test_membership():
+    c = Caravan()
+
+    def join_and_validate(member, guests, expected_receipt, expected_members):
+        actual_receipt = c.model.member_join(user=member, guests=guests)
+        assert actual_receipt == expected_receipt
+        assert c.model.members == expected_members
+
+    def leave_and_validate(member, expected_receipt, expected_members):
+        actual_receipt = c.model.member_leave(user=member)
+        assert actual_receipt == expected_receipt
+        assert c.model.members == expected_members
+
+    join_and_validate(
+        member=c.users.elliot,
+        guests=0,
+        expected_receipt=cm.MemberUpdateReceipt(
+            channel=c.model.channel,
+            user=c.users.elliot,
+            guests=0,
+            guests_delta=0,
+            is_new_user=True,
+            was_leader=None),
+        expected_members={
+            c.users.elliot: 0,
+        })
+
+    with pytest.raises(cm.MembersNotUpdated):
+        c.model.member_join(user=c.users.elliot, guests=0)
+
+    join_and_validate(
+        member=c.users.elliot,
+        guests=2,
+        expected_receipt=cm.MemberUpdateReceipt(
+            channel=c.model.channel,
+            user=c.users.elliot,
+            guests=2,
+            guests_delta=2,
+            is_new_user=False,
+            was_leader=None),
+        expected_members={
+            c.users.elliot: 2,
+        })
+
+    with pytest.raises(cm.MembersNotUpdated):
+        c.model.member_join(user=c.users.elliot, guests=2)
+
+    join_and_validate(
+        member=c.users.angela,
+        guests=4,
+        expected_receipt=cm.MemberUpdateReceipt(
+            channel=c.model.channel,
+            user=c.users.angela,
+            guests=4,
+            guests_delta=4,
+            is_new_user=True,
+            was_leader=None),
+        expected_members={
+            c.users.elliot: 2,
+            c.users.angela: 4,
+        })
+
+    join_and_validate(
+        member=c.users.angela,
+        guests=1,
+        expected_receipt=cm.MemberUpdateReceipt(
+            channel=c.model.channel,
+            user=c.users.angela,
+            guests=1,
+            guests_delta=-3,
+            is_new_user=False,
+            was_leader=None),
+        expected_members={
+            c.users.elliot: 2,
+            c.users.angela: 1,
+        })
+
+    with pytest.raises(cm.TooManyGuests):
+        c.model.member_join(
+            user=c.users.elliot,
+            guests=cm.MAX_REASONABLE_GUESTS + 1)
+
+    leave_and_validate(
+        member=c.users.elliot,
+        expected_receipt=cm.MemberUpdateReceipt(
+            channel=c.model.channel,
+            user=c.users.elliot,
+            guests=2,
+            guests_delta=-2,
+            is_new_user=None,
+            was_leader=False),
+        expected_members={
+            c.users.angela: 1,
+        })
+
+    with pytest.raises(cm.MembersNotUpdated):
+        c.model.member_leave(c.users.elliot)
+
+    c.model.set_leaders(leaders=(c.users.angela,))
+
+    leave_and_validate(
+        member=c.users.angela,
+        expected_receipt=cm.MemberUpdateReceipt(
+            channel=c.model.channel,
+            user=c.users.angela,
+            guests=1,
+            guests_delta=-1,
+            is_new_user=None,
+            was_leader=True),
+        expected_members={})
+
+
+def test_gen_roles():
+    c = Caravan()
+
+    c.users.admin.permissions[c.model.channel].administrator = True
+    c.model.set_leaders((c.users.leader,))
+    c.model.member_join(user=c.users.member, guests=0)
+
+    assert frozenset(c.model.gen_roles(user=c.users.admin)) == frozenset((
+        cm.Role.ADMIN,
+        cm.Role.ANYONE,
+    ))
+
+    assert frozenset(c.model.gen_roles(user=c.users.leader)) == frozenset((
+        cm.Role.LEADER,
+        cm.Role.MEMBER,
+        cm.Role.ANYONE,
+    ))
+
+    assert frozenset(c.model.gen_roles(user=c.users.member)) == frozenset((
+        cm.Role.MEMBER,
+        cm.Role.ANYONE,
+    ))
+
+    assert frozenset(c.model.gen_roles(user=c.users.anyone)) == frozenset((
+        cm.Role.ANYONE,
+    ))
+
+
 @pytest.mark.parametrize('a,b,expected_result', (
     ('', '', ''),
     ('a', 'b', '-a\n+b'),
@@ -576,9 +734,18 @@ class FakeGuild:
     name: str
 
 
+@dataclasses.dataclass
+class FakePermissions:
+    administrator: bool = False
+
+
 @dataclasses.dataclass(frozen=True)
 class FakeUser:
     name: str
+    permissions: DefaultDict[FakeChannel, FakePermissions] = dataclasses.field(
+        default_factory=functools.partial(
+            collections.defaultdict, FakePermissions),
+        compare=False, hash=None)
 
     @property
     def id(self):
@@ -587,6 +754,9 @@ class FakeUser:
     @property
     def display_name(self):
         return self.name
+
+    def permissions_in(self, channel: FakeChannel):
+        return self.permissions[channel]
 
 
 @dataclasses.dataclass
