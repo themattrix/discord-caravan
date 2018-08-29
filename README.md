@@ -31,6 +31,20 @@ Options:
                             [default: .*caravan.*].
 ``````
 
+## Docker Usage
+
+First, ensure that you have a `gyms.json` file in the appropriate format at the
+root of the project. Then:
+
+    export DISCORD_BOT_TOKEN=YOUR_SECRET_TOKEN
+    docker-compose run -e DISCORD_BOT_TOKEN="${DISCORD_BOT_TOKEN}" --rm caravan_bot <args> 
+
+Where `<args>` are the same, minus the `--gyms` option since that's already baked into the container.
+
+If you change the gyms (or the code), restart the container after running:
+
+    docker-compose build
+
 
 ## Contributing
 
@@ -81,8 +95,8 @@ Set up your development environment:
 - [X] allow anyone to `!join` the caravan, optionally with guests
 - [X] allow members to `!leave` the caravan
 - [X] warn when the attendance nears 20 for any individual gym
-- [ ] lots of unit tests
-- [ ] Docker Compose runner
+- [X] lots of unit tests
+- [X] Docker Compose runner
 - [ ] allow caravan members to restrict their attendance to partial routes
 - [ ] when the caravan is active, allow members to signal `!here`
 - [ ] allow leaders to `!lobby`

@@ -74,12 +74,13 @@ class MemberUpdateReceipt(UpdateReceipt):
 
     def __post_init__(self):
         self.log(
-            '{status} {title} {member}{delta}'.format(
+            '{status} {title} @{member} has {what} {delta}'.format(
                 status='New' if self.is_new_user else 'Existing',
                 title='leader' if self.was_leader else 'member',
-                member=format_member(user=self.user, guests=self.guests),
-                delta=f' (guest delta: {self.guests_delta:+})'
-                      if self.is_new_user else ''))
+                member=self.user.display_name,
+                what='left' if self.was_leader is not None else (
+                    'joined' if self.is_new_user else 'updated guest count'),
+                delta=f'(guest delta: {self.guests_delta:+})',))
 
 
 class CaravanMode(enum.Enum):
