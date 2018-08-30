@@ -71,7 +71,7 @@ class Places:
         log.info(
             f'Matched "{fuzzy_name}" to "{matched_name}" with score {score}.')
 
-        if score < 80:
+        if score < 90:
             raise PlaceNotFoundException(fuzzy_name)
 
         return self.places[self.aliases.get(matched_name, matched_name)]

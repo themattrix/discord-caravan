@@ -10,6 +10,7 @@ from . import base_pin
 
 
 CARAVAN_SIZE_WARNING_THRESHOLD = 16
+CARAVAN_MAX_SIZE = 20
 
 
 @dataclasses.dataclass
@@ -48,12 +49,26 @@ def content_and_embed(model: caravan_model.CaravanModel) -> Dict:
 
     embed.set_footer(text='Members | Caravan Bot v1')
 
+    total_members = model.total_members
+
+    if total_members <= CARAVAN_SIZE_WARNING_THRESHOLD:
+        content = None
+    elif total_members < CARAVAN_MAX_SIZE:
+        content = (
+            f'_Nearing a full caravan ({total_members} members and '
+            f'guests)! Consider splitting this caravan into several._ '
+            f':arrow_up_down:')
+    elif total_members == CARAVAN_MAX_SIZE:
+        content = (
+            f'_Full caravan ({total_members} members and guests)! '
+            f'Consider splitting this caravan into several._ :arrow_up_down:')
+    else:
+        content = (
+            f'_**Overfull** caravan ({total_members} members and guests)! '
+            f'Consider splitting this caravan into several._ :arrow_up_down:')
+
     return {
-        'content': (
-            None if len(model.members) <= CARAVAN_SIZE_WARNING_THRESHOLD else (
-                f'_Nearing a full caravan ({len(model.members)} members)! '
-                f'Consider splitting this caravan into multiples._ '
-                f':arrow_up_down:')),
+        'content': content,
         'embed': embed,
     }
 

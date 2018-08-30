@@ -196,8 +196,14 @@ class CaravanModel:
             yield Role.MEMBER
         if user in self.leaders:
             yield Role.LEADER
-        if user.permissions_in(self.channel).administrator:
-            yield Role.ADMIN
+        with contextlib.suppress(AttributeError):
+            if user.permissions_in(self.channel).administrator:
+                yield Role.ADMIN
+
+    @property
+    def total_members(self):
+        """Returns the number of members plus guests."""
+        return len(self.members) + sum(self.members.values())
 
     def set_leaders(
             self,
