@@ -29,7 +29,7 @@ Options:
                             [default: .*].
   --channel-filter=REGEX    Restrict bot to channels matching this pattern
                             [default: .*caravan.*].
-``````
+```
 
 ## Docker Usage
 
@@ -39,9 +39,10 @@ root of the project. Then:
     export DISCORD_BOT_TOKEN=YOUR_SECRET_TOKEN
     docker-compose run -e DISCORD_BOT_TOKEN="${DISCORD_BOT_TOKEN}" --rm caravan_bot <args> 
 
-Where `<args>` are the same, minus the `--gyms` option since that's already baked into the container.
+Where `<args>` are the same, minus the `--gyms` option since that's already mounted into the container.
 
-If you change the gyms (or the code), restart the container after running:
+If you change the gyms, restart the container. If you change the code, restart
+the container after running:
 
     docker-compose build
 

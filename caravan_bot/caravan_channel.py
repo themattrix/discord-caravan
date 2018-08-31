@@ -65,7 +65,7 @@ class CaravanChannel:
         command = commands.commands[cmd_msg.name]
         # noinspection PyProtectedMember
         author_roles = frozenset(self.model.gen_roles(
-            cmd_msg.message.author._user))
+            cmd_msg.message.author))
 
         if not author_roles & command.allowed_roles:
             await self.warn(
@@ -119,7 +119,7 @@ class CaravanChannel:
     async def _help(self, cmd_msg: commands.CommandMessage):
         # noinspection PyProtectedMember
         user_roles = frozenset(
-            self.model.gen_roles(cmd_msg.message.author._user))
+            self.model.gen_roles(cmd_msg.message.author))
 
         j = natural_language.join
 
@@ -140,10 +140,17 @@ class CaravanChannel:
 
             display_roles = user_roles - frozenset({Role.ANYONE})
 
+            if display_roles:
+                roles_description = (
+                    f'your caravan '
+                    f'{"role is" if len(display_roles) == 1 else "roles are"} '
+                    f'{roles(display_roles, lambda x: f"**{x}**")}')
+            else:
+                roles_description = (
+                    'you are not a member of this caravan (_yet_ :wink:)')
+
             await self.info(
-                f'{cmd_msg.message.author.mention}, your caravan '
-                f'{"role is" if len(display_roles) == 1 else "roles are"} '
-                f'{roles(display_roles, lambda x: f"**{x}**")}. '
+                f'{cmd_msg.message.author.mention}, {roles_description}. '
                 f'You may use the following commands:\n' +
                 '\n'.join(gen_help_lines()))
         else:

@@ -8,6 +8,5 @@ COPY ./Pipfile ./
 RUN pipenv install
 
 COPY ./caravan_bot ./caravan_bot
-COPY ./gyms.json ./
 
-ENTRYPOINT ["pipenv", "run", "python", "-m", "caravan_bot", "--gyms", "./gyms.json"]
+ENTRYPOINT ["pipenv", "run", "python", "-m", "caravan_bot", "--gyms", "/gyms.json"]

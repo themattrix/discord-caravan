@@ -189,16 +189,16 @@ class CaravanModel:
     route: CaravanRoute = ()
     mode: CaravanMode = CaravanMode.PLANNING
 
-    def gen_roles(self, user: discord.User) -> Iterable[Role]:
+    # noinspection PyProtectedMember
+    def gen_roles(self, member: discord.Member) -> Iterable[Role]:
         """Yields the user's roles in this caravan."""
         yield Role.ANYONE
-        if user in self.members:
+        if member._user in self.members:
             yield Role.MEMBER
-        if user in self.leaders:
+        if member._user in self.leaders:
             yield Role.LEADER
-        with contextlib.suppress(AttributeError):
-            if user.permissions_in(self.channel).administrator:
-                yield Role.ADMIN
+        if member.permissions_in(self.channel).administrator:
+            yield Role.ADMIN
 
     @property
     def total_members(self):

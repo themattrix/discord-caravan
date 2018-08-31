@@ -41,7 +41,9 @@ def content_and_embed(model: caravan_model.CaravanModel) -> Dict:
         inline=False)
 
     embed.add_field(
-        name=f'{p("Member", total_members)} :busts_in_silhouette:',
+        name=(
+            f'{p("Member", total_members)} ({total_members}) '
+            f':busts_in_silhouette:'),
         value=(
             '_No members! Be the first to `!join`._'
             if not model.members else j(

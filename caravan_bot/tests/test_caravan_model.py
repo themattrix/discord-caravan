@@ -687,23 +687,23 @@ def test_gen_roles():
     c.model.set_leaders((c.users.leader,))
     c.model.member_join(user=c.users.member, guests=0)
 
-    assert frozenset(c.model.gen_roles(user=c.users.admin)) == frozenset((
+    assert frozenset(c.model.gen_roles(c.users.admin)) == frozenset((
         cm.Role.ADMIN,
         cm.Role.ANYONE,
     ))
 
-    assert frozenset(c.model.gen_roles(user=c.users.leader)) == frozenset((
+    assert frozenset(c.model.gen_roles(c.users.leader)) == frozenset((
         cm.Role.LEADER,
         cm.Role.MEMBER,
         cm.Role.ANYONE,
     ))
 
-    assert frozenset(c.model.gen_roles(user=c.users.member)) == frozenset((
+    assert frozenset(c.model.gen_roles(c.users.member)) == frozenset((
         cm.Role.MEMBER,
         cm.Role.ANYONE,
     ))
 
-    assert frozenset(c.model.gen_roles(user=c.users.anyone)) == frozenset((
+    assert frozenset(c.model.gen_roles(c.users.anyone)) == frozenset((
         cm.Role.ANYONE,
     ))
 
@@ -754,6 +754,10 @@ class FakeUser:
     @property
     def display_name(self):
         return self.name
+
+    @property
+    def _user(self):
+        return self
 
     def permissions_in(self, channel: FakeChannel):
         return self.permissions[channel]

@@ -2,3 +2,5 @@ version: '3'
 services:
   caravan_bot:
     build: .
+    volumes:
+    - "./gyms.json:/gyms.json:ro"
