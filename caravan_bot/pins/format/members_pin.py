@@ -28,6 +28,8 @@ def content_and_embed(model: caravan_model.CaravanModel) -> Dict:
     p = natural_language.pluralize
     j = natural_language.join
 
+    total_members = model.total_members
+
     embed = discord.Embed(title='Caravan Members')
 
     embed.add_field(
@@ -39,7 +41,7 @@ def content_and_embed(model: caravan_model.CaravanModel) -> Dict:
         inline=False)
 
     embed.add_field(
-        name=f'{p("Member", model.members)} :busts_in_silhouette:',
+        name=f'{p("Member", total_members)} :busts_in_silhouette:',
         value=(
             '_No members! Be the first to `!join`._'
             if not model.members else j(
@@ -48,8 +50,6 @@ def content_and_embed(model: caravan_model.CaravanModel) -> Dict:
         inline=False)
 
     embed.set_footer(text='Members | Caravan Bot v1')
-
-    total_members = model.total_members
 
     if total_members <= CARAVAN_SIZE_WARNING_THRESHOLD:
         content = None

@@ -81,7 +81,7 @@ class CommandMessage:
 
     @classmethod
     def from_message(cls, message: discord.Message):
-        match = COMMAND_PATTERN.search(message.content)
+        match = COMMAND_PATTERN.search(message.content.strip())
         if not match:
             raise NotACommand()
 
