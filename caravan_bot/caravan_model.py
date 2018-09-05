@@ -39,10 +39,10 @@ class UpdateReceipt:
 
 @dataclasses.dataclass(frozen=True)
 class LeaderUpdateReceipt(UpdateReceipt):
-    leaders_added: Dict[discord.User, int]
-    leaders_removed: Dict[discord.User, int]
-    old_leaders: FrozenSet[discord.User]
-    new_leaders: FrozenSet[discord.User]
+    leaders_added: Dict[discord.Member, int]
+    leaders_removed: Dict[discord.Member, int]
+    old_leaders: FrozenSet[discord.Member]
+    new_leaders: FrozenSet[discord.Member]
 
     def __post_init__(self):
         self.log('Leaders changed:\n' + line_diff(
@@ -66,11 +66,12 @@ class MembersNotUpdated(Exception):
 
 @dataclasses.dataclass(frozen=True)
 class MemberUpdateReceipt(UpdateReceipt):
-    user: discord.User
+    user: discord.Member
     guests: int
     guests_delta: int
     is_new_user: Optional[bool] = None  # only set on member add
     was_leader: Optional[bool] = None   # only set on member remove
+    left_server: Optional[bool] = None  # only set on member remove
 
     def __post_init__(self):
         self.log(
@@ -78,8 +79,10 @@ class MemberUpdateReceipt(UpdateReceipt):
                 status='New' if self.is_new_user else 'Existing',
                 title='leader' if self.was_leader else 'member',
                 member=self.user.display_name,
-                what='left' if self.was_leader is not None else (
-                    'joined' if self.is_new_user else 'updated guest count'),
+                what='left the server' if self.left_server else (
+                    'left' if self.was_leader is not None else (
+                        'joined' if self.is_new_user else
+                        'updated guest count')),
                 delta=f'(guest delta: {self.guests_delta:+})',))
 
 
@@ -184,18 +187,18 @@ class CaravanModel:
     receipts. Raises exceptions when requested state changes are not made.
     """
     channel: discord.TextChannel
-    leaders: FrozenSet[discord.User] = frozenset()
-    members: Dict[discord.User, int] = dataclasses.field(default_factory=dict)
+    leaders: FrozenSet[discord.Member] = frozenset()
+    members: Dict[discord.Member, int] = dataclasses.field(
+        default_factory=dict)
     route: CaravanRoute = ()
     mode: CaravanMode = CaravanMode.PLANNING
 
-    # noinspection PyProtectedMember
     def gen_roles(self, member: discord.Member) -> Iterable[Role]:
         """Yields the user's roles in this caravan."""
         yield Role.ANYONE
-        if member._user in self.members:
+        if member in self.members:
             yield Role.MEMBER
-        if member._user in self.leaders:
+        if member in self.leaders:
             yield Role.LEADER
         if member.permissions_in(self.channel).administrator:
             yield Role.ADMIN
@@ -207,7 +210,7 @@ class CaravanModel:
 
     def set_leaders(
             self,
-            leaders: Iterable[discord.User]
+            leaders: Iterable[discord.Member]
     ) -> LeaderUpdateReceipt:
         """
         Delegate a new set of caravan leaders.
@@ -436,7 +439,7 @@ class CaravanModel:
 
     def member_join(
             self,
-            user: discord.User,
+            user: discord.Member,
             guests: int = 0
     ) -> MemberUpdateReceipt:
         """
@@ -469,7 +472,11 @@ class CaravanModel:
 
         return receipt
 
-    def member_leave(self, user: discord.User) -> MemberUpdateReceipt:
+    def member_leave(
+            self,
+            user: discord.Member,
+            left_server: bool,
+    ) -> MemberUpdateReceipt:
         """
         Leave the caravan with whatever guests the member had invited.
 
@@ -488,7 +495,8 @@ class CaravanModel:
             user=user,
             guests=guests,
             guests_delta=-guests,
-            was_leader=user in self.leaders)
+            was_leader=user in self.leaders,
+            left_server=left_server)
 
         self.leaders -= frozenset({user})
 
@@ -589,11 +597,11 @@ def next_unvisited_place(route: CaravanRouteIter):
 # Logging Helper Functions
 #
 
-def format_member(user: discord.User, guests: int = 0) -> str:
+def format_member(user: discord.Member, guests: int = 0) -> str:
     return f'@{user.display_name}' + ('' if guests == 0 else f' +{guests}')
 
 
-def sorted_users(users: Iterable[discord.User]) -> Iterable[discord.User]:
+def sorted_users(users: Iterable[discord.Member]) -> Iterable[discord.Member]:
     return sorted(users, key=lambda u: u.id)
 
 

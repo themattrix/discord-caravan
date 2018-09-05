@@ -576,8 +576,10 @@ def test_membership():
         assert actual_receipt == expected_receipt
         assert c.model.members == expected_members
 
-    def leave_and_validate(member, expected_receipt, expected_members):
-        actual_receipt = c.model.member_leave(user=member)
+    def leave_and_validate(
+            member, left_server, expected_receipt, expected_members):
+        actual_receipt = c.model.member_leave(
+            user=member, left_server=left_server)
         assert actual_receipt == expected_receipt
         assert c.model.members == expected_members
 
@@ -590,7 +592,8 @@ def test_membership():
             guests=0,
             guests_delta=0,
             is_new_user=True,
-            was_leader=None),
+            was_leader=None,
+            left_server=None),
         expected_members={
             c.users.elliot: 0,
         })
@@ -607,7 +610,8 @@ def test_membership():
             guests=2,
             guests_delta=2,
             is_new_user=False,
-            was_leader=None),
+            was_leader=None,
+            left_server=None),
         expected_members={
             c.users.elliot: 2,
         })
@@ -624,7 +628,8 @@ def test_membership():
             guests=4,
             guests_delta=4,
             is_new_user=True,
-            was_leader=None),
+            was_leader=None,
+            left_server=None),
         expected_members={
             c.users.elliot: 2,
             c.users.angela: 4,
@@ -639,7 +644,8 @@ def test_membership():
             guests=1,
             guests_delta=-3,
             is_new_user=False,
-            was_leader=None),
+            was_leader=None,
+            left_server=None),
         expected_members={
             c.users.elliot: 2,
             c.users.angela: 1,
@@ -652,31 +658,35 @@ def test_membership():
 
     leave_and_validate(
         member=c.users.elliot,
+        left_server=False,
         expected_receipt=cm.MemberUpdateReceipt(
             channel=c.model.channel,
             user=c.users.elliot,
             guests=2,
             guests_delta=-2,
             is_new_user=None,
-            was_leader=False),
+            was_leader=False,
+            left_server=False),
         expected_members={
             c.users.angela: 1,
         })
 
     with pytest.raises(cm.MembersNotUpdated):
-        c.model.member_leave(c.users.elliot)
+        c.model.member_leave(c.users.elliot, left_server=False)
 
     c.model.set_leaders(leaders=(c.users.angela,))
 
     leave_and_validate(
         member=c.users.angela,
+        left_server=True,
         expected_receipt=cm.MemberUpdateReceipt(
             channel=c.model.channel,
             user=c.users.angela,
             guests=1,
             guests_delta=-1,
             is_new_user=None,
-            was_leader=True),
+            was_leader=True,
+            left_server=True),
         expected_members={})
 
 

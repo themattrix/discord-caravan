@@ -1,7 +1,7 @@
 import dataclasses
 import re
 
-from typing import Callable, Iterable
+from typing import Iterable, Union
 
 import discord
 
@@ -18,38 +18,34 @@ class InvalidGuestFormat(Exception):
     """Raised if the guest format was unrecognized."""
 
 
-def gen_users(
-        get_user: Callable[[int], discord.User],
-        content: str
-) -> Iterable[discord.User]:
+def gen_members(
+        channel: discord.TextChannel,
+        content: str,
+) -> Iterable[Union[discord.Member, int]]:
 
     it = sanitize.gen_user_ids(content)
-    it = (get_user(i) for i in it)
+    it = (channel.guild.get_member(i) or i for i in it)
     it = (i for i in it if i is not None)
 
     yield from it
 
 
 @dataclasses.dataclass(frozen=True)
-class Member:
-    user: discord.User
+class CaravanMember:
+    user: Union[discord.Member, int]
     guests: int
 
 
-def gen_members(
-        get_user: Callable[[int], discord.User],
-        content: str
-) -> Iterable[discord.User]:
+def gen_caravan_members(
+        channel: discord.TextChannel,
+        content: str,
+) -> Iterable[CaravanMember]:
 
-    it = USER_WITH_GUESTS_PATTERN.finditer(content)
-    it = (
-        Member(
-            user=get_user(int(i.group('id'))),
-            guests=int(i.group('guests') or 0))
-        for i in it)
-    it = (i for i in it if i.user is not None)
-
-    yield from it
+    for m in USER_WITH_GUESTS_PATTERN.finditer(content):
+        user_id = int(m.group('id'))
+        guests = int(m.group('guests') or 0)
+        member = channel.guild.get_member(user_id)
+        yield CaravanMember(user=member or user_id, guests=guests)
 
 
 def get_guest_count(content: str) -> int:

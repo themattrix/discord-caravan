@@ -7,8 +7,7 @@ A [Discord](https://discordapp.com/) bot 🤖 for managing [Pokémon GO](https:/
 
 ## Usage
 
-Set your secret discord bot token, then run `caravan_bot` via
-[pipenv](https://docs.pipenv.org/).
+Set your secret discord bot token, then run `caravan_bot` via [pipenv](https://docs.pipenv.org/).
 
     export DISCORD_BOT_TOKEN=YOUR_SECRET_TOKEN
     pipenv run python -m caravan_bot <ARGS>
@@ -33,18 +32,42 @@ Options:
 
 ## Docker Usage
 
-First, ensure that you have a `gyms.json` file in the appropriate format at the
-root of the project. Then:
+First, ensure that you have a `gyms.json` file in the appropriate format at the root of the project. Then:
 
     export DISCORD_BOT_TOKEN=YOUR_SECRET_TOKEN
     docker-compose run -e DISCORD_BOT_TOKEN="${DISCORD_BOT_TOKEN}" --rm caravan_bot <args> 
 
 Where `<args>` are the same, minus the `--gyms` option since that's already mounted into the container.
 
-If you change the gyms, restart the container. If you change the code, restart
-the container after running:
+If you change the gyms, restart the container. If you change the code, restart the container after running:
 
     docker-compose build
+
+
+## `gyms.json`
+
+Here's an example `gyms.json`:
+
+```json
+{
+  "Gym Name 1": {
+    "location": "latitude,longitude"
+  },
+  "Gym Name 2": {
+    "location": "latitude,longitude",
+    "aliases": [
+      "Alias A",
+      "Alias B"
+    ]
+  }
+}
+```
+
+The gym names should be the "official" in-game Pokémon GO Gym names.
+Aliases are optional, but are useful in situations where the gym is known in the community by other names.
+
+The `latitude,longitude` pairs can be grabbed from Google Maps or another mapping service.
+There are also websites dedicated to mapping gym locations.
 
 
 ## Contributing
@@ -98,11 +121,15 @@ Set up your development environment:
 - [X] warn when the attendance nears 20 for any individual gym
 - [X] lots of unit tests
 - [X] Docker Compose runner
+- [X] handle members who have left (or were banned from) the server
+- [ ] create and manage a role—containing all caravan members—for each caravan
+- [ ] CI: linting, type-checking, test running, and PR integration
+- [ ] `!kick` command
+- [ ] take gym distance into consideration when ranking gym name matches
+- [ ] handle pins containing unrecognized gym names
 - [ ] allow caravan members to restrict their attendance to partial routes
 - [ ] when the caravan is active, allow members to signal `!here`
 - [ ] allow leaders to `!lobby`
-- [ ] allow members to query the `!here` statuses with `!list`
-- [ ] take gym distance into consideration when ranking gym name matches
 - [ ] allow leaders to register start/stop times
 - [ ] notify members one hour prior to the caravan starting of the start time and starting location
 - [ ] automatically start/stop the caravan at the expected times

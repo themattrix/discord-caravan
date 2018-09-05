@@ -4,7 +4,7 @@ import functools
 import itertools
 import re
 
-from typing import Dict
+from typing import Dict, Union, Optional
 
 from .log import log, channel_log
 from .pins import exceptions
@@ -37,13 +37,35 @@ class CaravanClient(discord.Client):
 
         log.info(self._get_all_channels_message())
 
-    async def on_guild_channel_create(self, channel):
+    async def on_guild_channel_create(self, channel: discord.TextChannel):
         await self._init_channel(channel)
 
-    async def on_guild_channel_delete(self, channel):
+    async def on_guild_channel_delete(self, channel: discord.TextChannel):
         with contextlib.suppress(KeyError):
             self.channels.pop(channel)
             channel_log(channel, 'INFO', 'Channel deleted.')
+
+    async def on_member_remove(self, member: discord.Member):
+        for channel, caravan in self.channels.items():
+            if member.guild != channel.guild:
+                continue
+            await caravan.handle_member_remove(user=member)
+
+    async def on_member_ban(
+            self,
+            guild: discord.Guild,
+            user: Union[discord.User, discord.Member]):
+
+        if not isinstance(user, discord.Member):
+            # If we receive a User instead of a Member, then the user was
+            # banned after leaving the server. In that case, we don't care
+            # since by definition they can't be part of a caravan.
+            return
+
+        for channel, caravan in self.channels.items():
+            if guild != channel.guild:
+                continue
+            await caravan.handle_member_remove(user=user)
 
     async def on_message(self, message: discord.Message):
         if message.author == self.user:
@@ -93,17 +115,23 @@ class CaravanClient(discord.Client):
                 await caravan_channel.CaravanChannel.from_channel(
                     channel=channel,
                     gyms=self.gyms,
-                    get_user=self.get_user,
-                    bot_user=self.user))
+                    bot_user=self.user,
+                    get_user=self.get_user_from_id))
         except discord.errors.Forbidden as e:
             c_log('ERROR', f'Ignoring channel. Bot lacking permissions: {e}')
         except exceptions.InvalidPinFormat as e:
             c_log('ERROR', f'Ignoring channel. Invalid pin format: {e}')
 
+    async def get_user_from_id(self, user_id: int) -> Optional[discord.User]:
+        return self.get_user(user_id) or await self.get_user_info(user_id)
+
     def _get_all_channels_message(self) -> str:
         if not self.channels:
-            return 'Found 0 caravan channels.'
+            return 'Found 0 caravan channels. Waiting for new ones...'
 
+        p = natural_language.pluralize
+
+        # Sort by guild (server) name, and then by channel name.
         it = self.channels.keys()
         it = sorted(it, key=lambda i: i.guild.id)
         it = itertools.groupby(it, key=lambda i: i.guild.id)
@@ -111,10 +139,20 @@ class CaravanClient(discord.Client):
         it = sorted(it, key=lambda g: g[0].guild.name)
         it = (sorted(g, key=lambda c: c.name) for g in it)
 
-        return 'Found {} caravan {}:\n{}'.format(
-            len(self.channels),
-            natural_language.pluralize('channel', self.channels),
-            '\n'.join(
-                f'  {g[0].guild.name}\n' + '\n'.join(
-                    f'    → {c.name}' for c in g)
-                for g in it))
+        def format_server(guild):
+            return f'  {guild[0].guild.name}\n' + '\n'.join(
+                format_channel(c) for c in guild)
+
+        def format_channel(channel):
+            caravan = self.channels[channel]
+            members = caravan.model.total_members
+            stops = len(caravan.model.route)
+            return (
+                f'    → {channel.name} ('
+                f'{members} {p("member", members)}, '
+                f'{stops} {p("stop", stops)})')
+
+        return (
+            f'Monitoring {len(self.channels)} caravan '
+            f'{p("channel", self.channels)}:\n' + '\n'.join(
+                format_server(g) for g in it))

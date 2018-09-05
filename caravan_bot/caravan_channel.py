@@ -1,7 +1,9 @@
+import contextlib
 import dataclasses
 import functools
+import random
 
-from typing import Callable, Iterable, Tuple, Optional
+from typing import Any, Callable, Coroutine, Iterable, Tuple, Optional
 
 import discord
 import inflection
@@ -9,6 +11,7 @@ import inflection
 from .roles import Role
 from .pins import init_pins
 from .pins.format import base_pin
+from .pins.parse import parse_receipts
 from . import caravan_model
 from . import commands
 from . import members
@@ -26,7 +29,6 @@ class CaravanChannel:
     channel: discord.TextChannel
     model: caravan_model.CaravanModel
     pins: Tuple[base_pin.BasePin, ...]
-    get_user: Callable[[int], discord.User]
     gyms: places.Places
 
     @classmethod
@@ -34,24 +36,37 @@ class CaravanChannel:
             cls,
             channel: discord.TextChannel,
             gyms: places.Places,
-            get_user: Callable[[int], discord.User],
-            bot_user: discord.User
+            bot_user: discord.ClientUser,
+            get_user: Callable[
+                [int], Coroutine[Any, Any, Optional[discord.User]]],
     ) -> 'CaravanChannel':
 
         # Create an empty model to be populated as the pins are parsed.
         model = caravan_model.CaravanModel(channel=channel)
 
-        return cls(
+        pins_receipt = await init_pins(
+            model=model,
+            channel=channel,
+            bot_user=bot_user,
+            all_places=gyms)
+
+        caravan = cls(
             channel=channel,
             model=model,
-            pins=await init_pins(
-                model=model,
-                channel=channel,
-                bot_user=bot_user,
-                all_places=gyms,
-                get_user=get_user),
-            get_user=get_user,
+            pins=pins_receipt.pins,
             gyms=gyms)
+
+        with contextlib.suppress(AttributeError):
+            missing = pins_receipt.members_parse_receipt.missing_members
+
+            if missing:
+                await caravan.handle_receipt(
+                    receipt=parse_receipts.MembersParseReceipt(
+                        missing_members={
+                            await get_user(user_id) or user_id: guests
+                            for user_id, guests in missing.items()}))
+
+        return caravan
 
     async def info(self, msg):
         if msg:
@@ -63,7 +78,6 @@ class CaravanChannel:
 
     async def handle_command(self, cmd_msg: commands.CommandMessage):
         command = commands.commands[cmd_msg.name]
-        # noinspection PyProtectedMember
         author_roles = frozenset(self.model.gen_roles(
             cmd_msg.message.author))
 
@@ -77,7 +91,7 @@ class CaravanChannel:
             return
 
         try:
-            receipt = await command.handler(self, cmd_msg)
+            await self.handle_receipt(await command.handler(self, cmd_msg))
         except InvalidCommandArgs as e:
             await self.warn(
                 f'{e}\n'
@@ -101,15 +115,23 @@ class CaravanChannel:
                     'gym is' if len(e.unknown_names) == 1 else 'gyms are',
                     natural_language.join(
                         f'**{u}**' for u in e.unknown_names)))
-        else:
-            if receipt is not None:
-                # update pins
-                for p in self.pins:
-                    await p.update(receipt=receipt, model=self.model)
 
-                # reply to user so they know the command was processed
-                for r in user_responses(receipt):
-                    await self.info(r)
+    async def handle_receipt(self, receipt):
+        if receipt is None:
+            return
+
+        # update pins
+        for p in self.pins:
+            await p.update(receipt=receipt, model=self.model)
+
+        # message the channel so members know the caravan state has changed
+        for r in user_notifications(receipt):
+            await self.info(r)
+
+    async def handle_member_remove(self, user: discord.Member):
+        with contextlib.suppress(caravan_model.MembersNotUpdated):
+            await self.handle_receipt(
+                receipt=self.model.member_leave(user=user, left_server=True))
 
     @commands.register(
         'help',
@@ -117,7 +139,6 @@ class CaravanChannel:
         usage='!{cmd} [command]'
     )
     async def _help(self, cmd_msg: commands.CommandMessage):
-        # noinspection PyProtectedMember
         user_roles = frozenset(
             self.model.gen_roles(cmd_msg.message.author))
 
@@ -183,8 +204,9 @@ class CaravanChannel:
             cmd_msg: commands.CommandMessage
     ) -> Optional[caravan_model.LeaderUpdateReceipt]:
 
-        users = tuple(members.gen_users(
-            get_user=self.get_user, content=cmd_msg.args))
+        users = tuple(members.gen_members(
+            channel=self.channel,
+            content=cmd_msg.args))
         if not users:
             raise InvalidCommandArgs('You must specify at least one leader.')
         try:
@@ -219,6 +241,7 @@ class CaravanChannel:
                 'You must specify at least one gym in the route; preferably '
                 'more!')
 
+    # noinspection PyUnusedLocal
     @commands.register(
         'start', 'resume',
         description='Start or resume the caravan.',
@@ -235,6 +258,7 @@ class CaravanChannel:
             await self.info(
                 'The caravan has already been started!')
 
+    # noinspection PyUnusedLocal
     @commands.register(
         'stop', 'done',
         description='Stop the caravan.',
@@ -251,6 +275,7 @@ class CaravanChannel:
             await self.info(
                 'The caravan is already _not_ active!')
 
+    # noinspection PyUnusedLocal
     @commands.register(
         'reset',
         description='Reset the caravan.',
@@ -266,6 +291,7 @@ class CaravanChannel:
             await self.info(
                 'The caravan is already _not_ active!')
 
+    # noinspection PyUnusedLocal
     @commands.register(
         'next',
         description='Advance the caravan to the next gym.',
@@ -388,9 +414,8 @@ class CaravanChannel:
             cmd_msg: commands.CommandMessage
     ) -> Optional[caravan_model.MemberUpdateReceipt]:
         try:
-            # noinspection PyProtectedMember
             return self.model.member_join(
-                user=cmd_msg.message.author._user,
+                user=cmd_msg.message.author,
                 guests=members.get_guest_count(cmd_msg.args))
         except members.InvalidGuestFormat:
             raise InvalidCommandArgs(
@@ -400,8 +425,7 @@ class CaravanChannel:
             await self.warn(
                 f'Typo? **{e.guests}** is a _lot_ of guests.')
         except caravan_model.MembersNotUpdated:
-            # noinspection PyProtectedMember
-            guest_count = self.model.members[cmd_msg.message.author._user]
+            guest_count = self.model.members[cmd_msg.message.author]
             await self.info(
                 f'You\'re already a member of this caravan with {guest_count} '
                 f'{natural_language.pluralize("guest", guest_count)}.\n'
@@ -409,7 +433,7 @@ class CaravanChannel:
 
     @commands.register(
         'leave',
-        description='Leave the route along with registered guests.',
+        description='Leave the route (with registered guests).',
         allowed_roles={Role.MEMBER},
     )
     async def _leave(
@@ -417,8 +441,9 @@ class CaravanChannel:
             cmd_msg: commands.CommandMessage
     ) -> Optional[caravan_model.MemberUpdateReceipt]:
         try:
-            # noinspection PyProtectedMember
-            return self.model.member_leave(user=cmd_msg.message.author._user)
+            return self.model.member_leave(
+                user=cmd_msg.message.author,
+                left_server=False)
         except caravan_model.MembersNotUpdated:
             await self.info(
                 'You\'re already _not_ a member of this caravan!')
@@ -445,7 +470,7 @@ class CaravanChannel:
 # Helpers
 #
 
-def leaders_msg(leaders: Iterable[discord.User], sep: str = ' ') -> str:
+def leaders_msg(leaders: Iterable[discord.Member], sep: str = ' ') -> str:
     mentions = sorted(u.mention for u in leaders)
     return (
         f'{natural_language.pluralize("leader", mentions)}{sep}'
@@ -453,12 +478,12 @@ def leaders_msg(leaders: Iterable[discord.User], sep: str = ' ') -> str:
 
 
 @functools.singledispatch
-def user_responses(receipt) -> Iterable[str]:
+def user_notifications(receipt) -> Iterable[str]:
     raise NotImplementedError(
         f'No handler for {type(receipt)} receipt: {receipt}')
 
 
-@user_responses.register
+@user_notifications.register
 def _(receipt: caravan_model.LeaderUpdateReceipt) -> Iterable[str]:
 
     def gen_sentences():
@@ -472,24 +497,28 @@ def _(receipt: caravan_model.LeaderUpdateReceipt) -> Iterable[str]:
     yield ' '.join(gen_sentences())
 
 
-@user_responses.register
+@user_notifications.register
+def _(receipt: parse_receipts.MembersParseReceipt) -> Iterable[str]:
+    for user_or_id, guests in receipt.missing_members.items():
+        yield from gen_member_left_server_messages(
+            who=(
+                'An unknown member (deleted account?)'
+                if isinstance(user_or_id, int) else
+                user_or_id.mention),
+            guests=guests)
+
+
+@user_notifications.register
 def _(receipt: caravan_model.MemberUpdateReceipt) -> Iterable[str]:
     p = natural_language.pluralize
 
-    if receipt.is_new_user is not None:
-        if receipt.is_new_user:
-            yield 'Welcome to the caravan, {who}!{guests}'.format(
-                who=receipt.user.mention,
-                guests=(
-                    '' if not receipt.guests else (
-                        f' You\'ve joined with {receipt.guests} '
-                        f'{p("guest", receipt.guests)}.')))
-        else:
-            yield (
-                f'You\'ve adjusted your guest count from '
-                f'**{receipt.guests - receipt.guests_delta}** to '
-                f'**{receipt.guests}**, {receipt.user.mention}.')
-    else:
+    if receipt.left_server:
+        yield from gen_member_left_server_messages(
+            who=receipt.user.mention,
+            guests=receipt.guests)
+        return
+
+    if receipt.is_new_user is None:
         yield (
             'Farewell, {who}! :wave: You\'ve left the caravan{guests}{leader}.'
             ''.format(
@@ -498,11 +527,61 @@ def _(receipt: caravan_model.MemberUpdateReceipt) -> Iterable[str]:
                     f' with {receipt.guests} {p("guest", receipt.guests)}'
                     if receipt.guests else ''),
                 leader=(
-                    ' and resigned your caravan leader role'
+                    ' and resigned your role as caravan leader'
                     if receipt.was_leader else '')))
+        return
+
+    if not receipt.is_new_user:
+        yield (
+            f'You\'ve adjusted your guest count from '
+            f'**{receipt.guests - receipt.guests_delta}** to '
+            f'**{receipt.guests}**, {receipt.user.mention}.')
+        return
+
+    yield (
+        'Welcome to the caravan, {who}!{guest_info}\n'
+        '_{guest_example} {leave_example}_'.format(
+            who=receipt.user.mention,
+            guest_info=(
+                '' if not receipt.guests else (
+                    f' You\'ve joined with **{receipt.guests}** '
+                    f'{p("guest", receipt.guests)}.')),
+            guest_example=(
+                'You may adjust your guest count with `!join [+N]`. '
+                'For example, type `!join +{example_guests}` to change your '
+                'guest count from {actual_guests} to {example_guests} guests.'
+                .format(
+                    actual_guests=receipt.guests,
+                    example_guests=2 if receipt.guests != 2 else 3)),
+            leave_example=(
+                'You may also `!leave` this caravan at any point if your '
+                'plans change.')))
 
 
-@user_responses.register
+WAYS_TO_DIE = (
+    'a broken arm',
+    'a broken leg',
+    'a fever',
+    'a snakebite',
+    'cholera',
+    'drowning',
+    'dysentery',
+    'exhaustion',
+    'measles',
+    'typhoid',)
+
+
+def gen_member_left_server_messages(who: str, guests: int):
+    p = natural_language.pluralize
+    yield (
+        '{who} has left the caravan{guests} after dying of {cause}. '
+        ':skull_crossbones:'.format(
+            who=who,
+            cause=random.choice(WAYS_TO_DIE),
+            guests=f' (with {guests} {p("guest", guests)})' if guests else ''))
+
+
+@user_notifications.register
 def _(receipt: caravan_model.ModeUpdateReceipt) -> Iterable[str]:
     if receipt.new_mode == caravan_model.CaravanMode.ACTIVE:
         yield (
@@ -537,7 +616,7 @@ def _(receipt: caravan_model.ModeUpdateReceipt) -> Iterable[str]:
             'again with `!start`._')
 
 
-@user_responses.register
+@user_notifications.register
 def _(receipt: caravan_model.RouteUpdateReceipt) -> Iterable[str]:
     if receipt.is_reorder_only:
         yield 'Reordered route!'
@@ -567,7 +646,7 @@ def _(receipt: caravan_model.RouteUpdateReceipt) -> Iterable[str]:
             is_first=False)
 
 
-@user_responses.register
+@user_notifications.register
 def _(receipt: caravan_model.RouteAdvancedReceipt) -> Iterable[str]:
     yield from gen_next_place_message(
         next_place=receipt.next_place,

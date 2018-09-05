@@ -6,6 +6,7 @@ import discord
 
 from ... import caravan_model
 from ... import natural_language
+from ..parse import parse_receipts
 from . import base_pin
 
 
@@ -18,6 +19,7 @@ class MembersPin(base_pin.BasePin):
     update_for = frozenset({
         caravan_model.LeaderUpdateReceipt,
         caravan_model.MemberUpdateReceipt,
+        parse_receipts.MembersParseReceipt,
     })
 
     def content_and_embed(self, model: caravan_model.CaravanModel) -> Dict:
@@ -75,5 +77,5 @@ def content_and_embed(model: caravan_model.CaravanModel) -> Dict:
     }
 
 
-def format_member(user: discord.User, guests: int) -> str:
+def format_member(user: discord.Member, guests: int) -> str:
     return user.mention if not guests else f'{user.mention} +{guests}'
