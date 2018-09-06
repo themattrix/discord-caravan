@@ -502,10 +502,23 @@ def _(receipt: parse_receipts.MembersParseReceipt) -> Iterable[str]:
     for user_or_id, guests in receipt.missing_members.items():
         yield from gen_member_left_server_messages(
             who=(
-                'An unknown member (deleted account?)'
+                'An unknown member _(deleted account?)_'
                 if isinstance(user_or_id, int) else
                 user_or_id.mention),
             guests=guests)
+
+
+WAYS_TO_DIE = (
+    'a broken arm',
+    'a broken leg',
+    'a fever',
+    'a snakebite',
+    'cholera',
+    'drowning',
+    'dysentery',
+    'exhaustion',
+    'measles',
+    'typhoid',)
 
 
 @user_notifications.register
@@ -520,14 +533,19 @@ def _(receipt: caravan_model.MemberUpdateReceipt) -> Iterable[str]:
 
     if receipt.is_new_user is None:
         yield (
-            'Farewell, {who}! :wave: You\'ve left the caravan{guests}{leader}.'
-            ''.format(
+            '{who}{guests} {has_have}{both_all} died of {cause}. '
+            ':skull_crossbones:\n'
+            '_They have left the caravan{leader}._'.format(
                 who=receipt.user.mention,
                 guests=(
-                    f' with {receipt.guests} {p("guest", receipt.guests)}'
+                    f' and their {receipt.guests} {p("guest", receipt.guests)}'
                     if receipt.guests else ''),
+                has_have='have' if receipt.guests else 'has',
+                both_all=' all' if receipt.guests > 1 else (
+                    ' both' if receipt.guests == 1 else ''),
+                cause=random.choice(WAYS_TO_DIE),
                 leader=(
-                    ' and resigned your role as caravan leader'
+                    ' and abandoned their role as caravan leader'
                     if receipt.was_leader else '')))
         return
 
@@ -558,27 +576,15 @@ def _(receipt: caravan_model.MemberUpdateReceipt) -> Iterable[str]:
                 'plans change.')))
 
 
-WAYS_TO_DIE = (
-    'a broken arm',
-    'a broken leg',
-    'a fever',
-    'a snakebite',
-    'cholera',
-    'drowning',
-    'dysentery',
-    'exhaustion',
-    'measles',
-    'typhoid',)
-
-
 def gen_member_left_server_messages(who: str, guests: int):
     p = natural_language.pluralize
     yield (
-        '{who} has left the caravan{guests} after dying of {cause}. '
-        ':skull_crossbones:'.format(
+        '{who}{guests} {has_have} left the server, and thus the caravan!'
+        .format(
             who=who,
-            cause=random.choice(WAYS_TO_DIE),
-            guests=f' (with {guests} {p("guest", guests)})' if guests else ''))
+            guests=(
+                f' and their {guests} {p("guest", guests)}' if guests else ''),
+            has_have='have' if guests else 'has'))
 
 
 @user_notifications.register
