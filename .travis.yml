@@ -1,0 +1,8 @@
+language: python
+python:
+    - "3.7dev"  # TODO: change to "3.7" when this is resolved: https://github.com/travis-ci/travis-ci/issues/9815
+
+install: pip install pipenv && pipenv install --dev
+
+script:
+    - pipenv run py.test caravan_bot/tests
