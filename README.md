@@ -94,6 +94,12 @@ Set up your development environment:
         pipenv install --dev
 
 
+### Testing
+
+1. Install [tox](https://tox.readthedocs.io) in Python 3.7.
+2. Run `tox` from the root of the repo. This will run the same checks that Travis CI does on pull requests.
+
+
 ### Design Goals
 
 - similar interface to [Meowth 2.0](https://github.com/FoglyOgly/Meowth)
@@ -123,8 +129,8 @@ Set up your development environment:
 - [X] lots of unit tests
 - [X] Docker Compose runner
 - [X] handle members who have left (or were banned from) the server
+- [X] CI: linting, type-checking, test running, and PR integration
 - [ ] create and manage a role—containing all caravan members—for each caravan
-- [ ] CI: linting, type-checking, test running, and PR integration
 - [ ] `!kick` command
 - [ ] take gym distance into consideration when ranking gym name matches
 - [ ] handle pins containing unrecognized gym names

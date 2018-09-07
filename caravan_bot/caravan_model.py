@@ -127,14 +127,14 @@ class EmptyRouteException(Exception):
 class DuplicatePlacesException(Exception):
     """Raised when the given route contains the same place multiple times."""
 
-    def __init__(self, duplicate_places: PlacesIter):
+    def __init__(self, duplicate_places: PlacesIter) -> None:
         self.duplicate_places = frozenset(duplicate_places)
 
 
 class MissingPlacesException(Exception):
     """Raised when some given places are not contained in the route."""
 
-    def __init__(self, missing_places: PlacesIter):
+    def __init__(self, missing_places: PlacesIter) -> None:
         self.missing_places = frozenset(missing_places)
 
 
@@ -544,8 +544,8 @@ class CaravanModel:
 @dataclasses.dataclass(frozen=True)
 class CaravanStop:
     place: places.Place
-    visited: bool = dataclasses.field(default=False)
-    skip_reason: Optional[str] = dataclasses.field(default=None)
+    visited: bool = False
+    skip_reason: Optional[str] = None
 
     def reset(self) -> 'CaravanStop':
         return self.__class__(place=self.place)

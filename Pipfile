@@ -9,3 +9,5 @@ python_version = "3.7"
 
 [dev-packages]
 pytest = "*"
+mypy = "*"
+flake8 = "*"

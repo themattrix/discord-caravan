@@ -57,7 +57,7 @@ class CaravanChannel:
             gyms=gyms)
 
         with contextlib.suppress(AttributeError):
-            missing = pins_receipt.members_parse_receipt.missing_members
+            missing = pins_receipt.members_parse_receipt.missing_members  # type: ignore  # noqa
 
             if missing:
                 await caravan.handle_receipt(
@@ -145,10 +145,10 @@ class CaravanChannel:
         j = natural_language.join
 
         def roles(role_iter: Iterable[Role], markdown=lambda x: x):
-            it = (r.name.casefold() for r in role_iter)
-            it = sorted(it)
-            it = (markdown(r) for r in it)
-            return j(it)
+            role_names = (r.name.casefold() for r in role_iter)
+            sorted_roles = sorted(role_names)
+            markdown_roles = (markdown(r) for r in sorted_roles)
+            return j(markdown_roles)
 
         if not cmd_msg.args:
             def gen_help_lines():
@@ -193,7 +193,7 @@ class CaravanChannel:
             await self.info('\n'.join(gen_help_lines()))
 
     @commands.register(
-        'leader', 'leaders',
+        'leader', 'leaders',  # type: ignore
         description='Set the caravan leader or leaders.',
         usage='!{cmd} @user [@user]...',
         allowed_roles={Role.ADMIN, Role.LEADER},
@@ -243,7 +243,7 @@ class CaravanChannel:
 
     # noinspection PyUnusedLocal
     @commands.register(
-        'start', 'resume',
+        'start', 'resume',  # type: ignore
         description='Start or resume the caravan.',
         allowed_roles={Role.LEADER},
         preferred='start'
@@ -260,7 +260,7 @@ class CaravanChannel:
 
     # noinspection PyUnusedLocal
     @commands.register(
-        'stop', 'done',
+        'stop', 'done',  # type: ignore
         description='Stop the caravan.',
         allowed_roles={Role.LEADER},
         preferred='stop'
@@ -277,7 +277,7 @@ class CaravanChannel:
 
     # noinspection PyUnusedLocal
     @commands.register(
-        'reset',
+        'reset',  # type: ignore
         description='Reset the caravan.',
         allowed_roles={Role.LEADER}
     )
@@ -293,7 +293,7 @@ class CaravanChannel:
 
     # noinspection PyUnusedLocal
     @commands.register(
-        'next',
+        'next',  # type: ignore
         description='Advance the caravan to the next gym.',
         allowed_roles={Role.LEADER}
     )
@@ -314,7 +314,7 @@ class CaravanChannel:
                 '_Try adding gyms with `!add` or `!append`._')
 
     @commands.register(
-        'skip',
+        'skip',  # type: ignore
         description='Skip the current gym.',
         usage='!{cmd} [reason]',
         allowed_roles={Role.LEADER}
@@ -405,7 +405,7 @@ class CaravanChannel:
                 'You must specify at least one gym to remove.')
 
     @commands.register(
-        'join',
+        'join',  # type: ignore
         description='Join the route, optionally with guests.',
         usage='!{cmd} [+N]',
     )
@@ -432,7 +432,7 @@ class CaravanChannel:
                 f'_Modify your guest count with `!join +N`._')
 
     @commands.register(
-        'leave',
+        'leave',  # type: ignore
         description='Leave the route (with registered guests).',
         allowed_roles={Role.MEMBER},
     )
@@ -483,7 +483,7 @@ def user_notifications(receipt) -> Iterable[str]:
         f'No handler for {type(receipt)} receipt: {receipt}')
 
 
-@user_notifications.register
+@user_notifications.register  # type: ignore  # noqa
 def _(receipt: caravan_model.LeaderUpdateReceipt) -> Iterable[str]:
 
     def gen_sentences():
@@ -497,7 +497,7 @@ def _(receipt: caravan_model.LeaderUpdateReceipt) -> Iterable[str]:
     yield ' '.join(gen_sentences())
 
 
-@user_notifications.register
+@user_notifications.register  # type: ignore  # noqa
 def _(receipt: parse_receipts.MembersParseReceipt) -> Iterable[str]:
     for user_or_id, guests in receipt.missing_members.items():
         yield from gen_member_left_server_messages(
@@ -521,7 +521,7 @@ WAYS_TO_DIE = (
     'typhoid',)
 
 
-@user_notifications.register
+@user_notifications.register  # type: ignore  # noqa
 def _(receipt: caravan_model.MemberJoinReceipt) -> Iterable[str]:
     p = natural_language.pluralize
 
@@ -552,7 +552,7 @@ def _(receipt: caravan_model.MemberJoinReceipt) -> Iterable[str]:
                 'plans change.')))
 
 
-@user_notifications.register
+@user_notifications.register  # type: ignore  # noqa
 def _(receipt: caravan_model.MemberLeaveReceipt) -> Iterable[str]:
     p = natural_language.pluralize
 
@@ -575,8 +575,8 @@ def _(receipt: caravan_model.MemberLeaveReceipt) -> Iterable[str]:
                 ' both' if receipt.guests == 1 else ''),
             cause=random.choice(WAYS_TO_DIE),
             leader=(
-                ' and abandoned their role as caravan leader'
-                if receipt.was_leader else '')))
+                f' and {receipt.user.display_name} has abandoned the '
+                f'caravan leader role' if receipt.was_leader else '')))
 
 
 def gen_member_left_server_messages(who: str, guests: int):
@@ -590,7 +590,7 @@ def gen_member_left_server_messages(who: str, guests: int):
             has_have='have' if guests else 'has'))
 
 
-@user_notifications.register
+@user_notifications.register  # type: ignore  # noqa
 def _(receipt: caravan_model.ModeUpdateReceipt) -> Iterable[str]:
     if receipt.new_mode == caravan_model.CaravanMode.ACTIVE:
         yield (
@@ -625,7 +625,7 @@ def _(receipt: caravan_model.ModeUpdateReceipt) -> Iterable[str]:
             'again with `!start`._')
 
 
-@user_notifications.register
+@user_notifications.register  # type: ignore  # noqa
 def _(receipt: caravan_model.RouteUpdateReceipt) -> Iterable[str]:
     if receipt.is_reorder_only:
         yield 'Reordered route!'
@@ -655,7 +655,7 @@ def _(receipt: caravan_model.RouteUpdateReceipt) -> Iterable[str]:
             is_first=False)
 
 
-@user_notifications.register
+@user_notifications.register  # type: ignore  # noqa
 def _(receipt: caravan_model.RouteAdvancedReceipt) -> Iterable[str]:
     yield from gen_next_place_message(
         next_place=receipt.next_place,

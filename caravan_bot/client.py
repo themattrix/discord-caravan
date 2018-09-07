@@ -2,9 +2,8 @@ import contextlib
 import dataclasses
 import functools
 import itertools
-import re
 
-from typing import Dict, Union, Optional
+from typing import Dict, Union, Optional, Pattern
 
 from .log import log, channel_log
 from .pins import exceptions
@@ -19,10 +18,8 @@ import discord
 @dataclasses.dataclass
 class CaravanClient(discord.Client):
     gyms: places.Places
-    # noinspection PyUnresolvedReferences
-    server_re: re.Pattern
-    # noinspection PyUnresolvedReferences
-    channel_re: re.Pattern
+    server_re: Pattern
+    channel_re: Pattern
     channels: Dict[discord.TextChannel, caravan_channel.CaravanChannel] = (
         dataclasses.field(default_factory=dict))
 
@@ -132,12 +129,12 @@ class CaravanClient(discord.Client):
         p = natural_language.pluralize
 
         # Sort by guild (server) name, and then by channel name.
-        it = self.channels.keys()
-        it = sorted(it, key=lambda i: i.guild.id)
-        it = itertools.groupby(it, key=lambda i: i.guild.id)
-        it = (tuple(g) for _, g in it)
-        it = sorted(it, key=lambda g: g[0].guild.name)
-        it = (sorted(g, key=lambda c: c.name) for g in it)
+        channels = self.channels.keys()
+        sorted_channels = sorted(channels, key=lambda i: i.guild.id)
+        by_guild = itertools.groupby(sorted_channels, key=lambda i: i.guild.id)
+        guilds = (tuple(g) for _, g in by_guild)
+        sorted_guilds = sorted(guilds, key=lambda g: g[0].guild.name)
+        fully_sorted = (sorted(g, key=lambda c: c.name) for g in sorted_guilds)
 
         def format_server(guild):
             return f'  {guild[0].guild.name}\n' + '\n'.join(
@@ -155,4 +152,4 @@ class CaravanClient(discord.Client):
         return (
             f'Monitoring {len(self.channels)} caravan '
             f'{p("channel", self.channels)}:\n' + '\n'.join(
-                format_server(g) for g in it))
+                format_server(g) for g in fully_sorted))

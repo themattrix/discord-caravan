@@ -1,7 +1,7 @@
 import dataclasses
 import re
 
-from typing import Callable, Dict, FrozenSet, Iterable, Tuple, Optional, List
+from typing import Callable, Dict, FrozenSet, Iterable, Tuple, Optional, List  # noqa
 
 import discord
 import fuzzywuzzy.process
@@ -28,17 +28,18 @@ def register(
         description: str,
         usage: str = '!{cmd}',
         allowed_roles: Iterable[Role] = (Role.ANYONE,),
-        preferred: Optional[str] = None):
+        preferred: Optional[str] = None
+) -> Callable[[Callable], Callable]:
 
-    preferred = preferred or cmds[0]
+    preferred_str = preferred or cmds[0]  # type: str
 
-    def decorator(fn):
+    def decorator(fn: Callable) -> Callable:
         cmd = Command(
             names=tuple(cmds),
             description=description,
-            usage=usage.replace('{cmd}', preferred),
+            usage=usage.replace('{cmd}', preferred_str),
             allowed_roles=frozenset(allowed_roles),
-            preferred=preferred,
+            preferred=preferred_str,
             handler=fn)
         unique_commands.append(cmd)
         for c in cmds:

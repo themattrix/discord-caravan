@@ -742,7 +742,7 @@ class FakePermissions:
 @dataclasses.dataclass(frozen=True)
 class FakeUser:
     name: str
-    permissions: DefaultDict[FakeChannel, FakePermissions] = dataclasses.field(
+    permissions: DefaultDict[FakeChannel, FakePermissions] = dataclasses.field(  # type: ignore  # noqa
         default_factory=functools.partial(
             collections.defaultdict, FakePermissions),
         compare=False, hash=None)
