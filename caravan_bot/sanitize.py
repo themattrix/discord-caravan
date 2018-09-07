@@ -2,7 +2,7 @@ import dataclasses
 import re
 import string
 
-from typing import Optional
+from typing import Match, Optional, Iterable
 
 ROUTE_LINE = re.compile(
     r'^\s*'
@@ -21,11 +21,11 @@ USER_ID_PATTERN = re.compile(
 QUOTES_AND_WHITESPACE = '\'"“‟‘‛”’"❛❜❝❞' + string.whitespace
 
 
-def clean_route(route: str):
-    it = ROUTE_LINE.finditer(route)
-    it = (RouteNode.from_match(m) for m in it)
-    it = (i for i in it if i.name)
-    yield from it
+def clean_route(route: str) -> Iterable['RouteNode']:
+    matches = ROUTE_LINE.finditer(route)
+    nodes = (RouteNode.from_match(m) for m in matches)
+    named_nodes = (n for n in nodes if n.name)
+    yield from named_nodes
 
 
 @dataclasses.dataclass
@@ -35,7 +35,7 @@ class RouteNode:
     skip_reason: Optional[str]
 
     @classmethod
-    def from_match(cls, match):
+    def from_match(cls, match: Match) -> 'RouteNode':
         place = match.group('place').strip(QUOTES_AND_WHITESPACE)
         visited = bool(match.group('strikethrough'))
         skipped = match.group('skipped') is not None
@@ -43,8 +43,8 @@ class RouteNode:
         return cls(name=place, visited=visited, skip_reason=skip_reason)
 
 
-def gen_user_ids(content: str):
-    it = USER_ID_PATTERN.finditer(content)
-    it = (i.group('id') for i in it)
-    it = (int(i) for i in it)
-    yield from it
+def gen_user_ids(content: str) -> Iterable[int]:
+    matches = USER_ID_PATTERN.finditer(content)
+    id_strings = (m.group('id') for m in matches)
+    ids = (int(i) for i in id_strings)
+    yield from ids

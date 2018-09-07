@@ -5,4 +5,6 @@ python:
 install: pip install pipenv && pipenv install --dev
 
 script:
+    - pipenv run flake8 caravan_bot
+    - pipenv run mypy --ignore-missing-imports caravan_bot
     - pipenv run py.test caravan_bot/tests

@@ -8,7 +8,7 @@ import discord
 from ... import caravan_model
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass  # type: ignore
 class BasePin(abc.ABC):
     message: Optional[discord.Message]
     version: str = 'v1'
@@ -23,6 +23,8 @@ class BasePin(abc.ABC):
         pass
 
     async def update(self, receipt, model: caravan_model.CaravanModel):
+        if self.message is None:
+            return
         if not any(isinstance(receipt, t) for t in self.update_for):
             return
         await self.message.edit(**self.content_and_embed(model))
@@ -35,6 +37,8 @@ class BasePin(abc.ABC):
             self.message = await channel.send(**self.content_and_embed(model))
 
     async def ensure_pinned(self):
+        if self.message is None:
+            return
         if not self.message.pinned:
             await pin_message(self.message)
 
