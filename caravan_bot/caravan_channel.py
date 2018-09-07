@@ -522,32 +522,8 @@ WAYS_TO_DIE = (
 
 
 @user_notifications.register
-def _(receipt: caravan_model.MemberUpdateReceipt) -> Iterable[str]:
+def _(receipt: caravan_model.MemberJoinReceipt) -> Iterable[str]:
     p = natural_language.pluralize
-
-    if receipt.left_server:
-        yield from gen_member_left_server_messages(
-            who=receipt.user.mention,
-            guests=receipt.guests)
-        return
-
-    if receipt.is_new_user is None:
-        yield (
-            '{who}{guests} {has_have}{both_all} died of {cause}. '
-            ':skull_crossbones:\n'
-            '_They have left the caravan{leader}._'.format(
-                who=receipt.user.mention,
-                guests=(
-                    f' and their {receipt.guests} {p("guest", receipt.guests)}'
-                    if receipt.guests else ''),
-                has_have='have' if receipt.guests else 'has',
-                both_all=' all' if receipt.guests > 1 else (
-                    ' both' if receipt.guests == 1 else ''),
-                cause=random.choice(WAYS_TO_DIE),
-                leader=(
-                    ' and abandoned their role as caravan leader'
-                    if receipt.was_leader else '')))
-        return
 
     if not receipt.is_new_user:
         yield (
@@ -574,6 +550,33 @@ def _(receipt: caravan_model.MemberUpdateReceipt) -> Iterable[str]:
             leave_example=(
                 'You may also `!leave` this caravan at any point if your '
                 'plans change.')))
+
+
+@user_notifications.register
+def _(receipt: caravan_model.MemberLeaveReceipt) -> Iterable[str]:
+    p = natural_language.pluralize
+
+    if receipt.left_server:
+        yield from gen_member_left_server_messages(
+            who=receipt.user.mention,
+            guests=receipt.guests)
+        return
+
+    yield (
+        '{who}{guests} {has_have}{both_all} died of {cause}. '
+        ':skull_crossbones:\n'
+        '_They have left the caravan{leader}._'.format(
+            who=receipt.user.mention,
+            guests=(
+                f' and their {receipt.guests} {p("guest", receipt.guests)}'
+                if receipt.guests else ''),
+            has_have='have' if receipt.guests else 'has',
+            both_all=' all' if receipt.guests > 1 else (
+                ' both' if receipt.guests == 1 else ''),
+            cause=random.choice(WAYS_TO_DIE),
+            leader=(
+                ' and abandoned their role as caravan leader'
+                if receipt.was_leader else '')))
 
 
 def gen_member_left_server_messages(who: str, guests: int):

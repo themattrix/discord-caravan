@@ -69,21 +69,33 @@ class MemberUpdateReceipt(UpdateReceipt):
     user: discord.Member
     guests: int
     guests_delta: int
-    is_new_user: Optional[bool] = None  # only set on member add
-    was_leader: Optional[bool] = None   # only set on member remove
-    left_server: Optional[bool] = None  # only set on member remove
+
+
+@dataclasses.dataclass(frozen=True)
+class MemberJoinReceipt(MemberUpdateReceipt):
+    is_new_user: bool
 
     def __post_init__(self):
         self.log(
-            '{status} {title} @{member} has {what} {delta}'.format(
+            '{status} member @{member} has {what} {delta}'.format(
                 status='New' if self.is_new_user else 'Existing',
+                member=self.user.display_name,
+                what='joined' if self.is_new_user else 'updated guest count',
+                delta=f'(guest delta: {self.guests_delta:+})'))
+
+
+@dataclasses.dataclass(frozen=True)
+class MemberLeaveReceipt(MemberUpdateReceipt):
+    was_leader: bool
+    left_server: bool
+
+    def __post_init__(self):
+        self.log(
+            'Existing {title} @{member} has {what} {delta}'.format(
                 title='leader' if self.was_leader else 'member',
                 member=self.user.display_name,
-                what='left the server' if self.left_server else (
-                    'left' if self.was_leader is not None else (
-                        'joined' if self.is_new_user else
-                        'updated guest count')),
-                delta=f'(guest delta: {self.guests_delta:+})',))
+                what='left the server' if self.left_server else 'left',
+                delta=f'(guest delta: {self.guests_delta:+})'))
 
 
 class CaravanMode(enum.Enum):
@@ -441,7 +453,7 @@ class CaravanModel:
             self,
             user: discord.Member,
             guests: int = 0
-    ) -> MemberUpdateReceipt:
+    ) -> MemberJoinReceipt:
         """
         Join a user to the caravan, optionally with guests.
 
@@ -461,7 +473,7 @@ class CaravanModel:
             if self.members[user] == guests:
                 raise MembersNotUpdated()
 
-        receipt = MemberUpdateReceipt(
+        receipt = MemberJoinReceipt(
             channel=self.channel,
             user=user,
             guests=guests,
@@ -476,7 +488,7 @@ class CaravanModel:
             self,
             user: discord.Member,
             left_server: bool,
-    ) -> MemberUpdateReceipt:
+    ) -> MemberLeaveReceipt:
         """
         Leave the caravan with whatever guests the member had invited.
 
@@ -490,7 +502,7 @@ class CaravanModel:
         except KeyError:
             raise MembersNotUpdated()
 
-        receipt = MemberUpdateReceipt(
+        receipt = MemberLeaveReceipt(
             channel=self.channel,
             user=user,
             guests=guests,

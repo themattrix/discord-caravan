@@ -586,14 +586,12 @@ def test_membership():
     join_and_validate(
         member=c.users.elliot,
         guests=0,
-        expected_receipt=cm.MemberUpdateReceipt(
+        expected_receipt=cm.MemberJoinReceipt(
             channel=c.model.channel,
             user=c.users.elliot,
             guests=0,
             guests_delta=0,
-            is_new_user=True,
-            was_leader=None,
-            left_server=None),
+            is_new_user=True),
         expected_members={
             c.users.elliot: 0,
         })
@@ -604,14 +602,12 @@ def test_membership():
     join_and_validate(
         member=c.users.elliot,
         guests=2,
-        expected_receipt=cm.MemberUpdateReceipt(
+        expected_receipt=cm.MemberJoinReceipt(
             channel=c.model.channel,
             user=c.users.elliot,
             guests=2,
             guests_delta=2,
-            is_new_user=False,
-            was_leader=None,
-            left_server=None),
+            is_new_user=False),
         expected_members={
             c.users.elliot: 2,
         })
@@ -622,14 +618,12 @@ def test_membership():
     join_and_validate(
         member=c.users.angela,
         guests=4,
-        expected_receipt=cm.MemberUpdateReceipt(
+        expected_receipt=cm.MemberJoinReceipt(
             channel=c.model.channel,
             user=c.users.angela,
             guests=4,
             guests_delta=4,
-            is_new_user=True,
-            was_leader=None,
-            left_server=None),
+            is_new_user=True),
         expected_members={
             c.users.elliot: 2,
             c.users.angela: 4,
@@ -638,14 +632,12 @@ def test_membership():
     join_and_validate(
         member=c.users.angela,
         guests=1,
-        expected_receipt=cm.MemberUpdateReceipt(
+        expected_receipt=cm.MemberJoinReceipt(
             channel=c.model.channel,
             user=c.users.angela,
             guests=1,
             guests_delta=-3,
-            is_new_user=False,
-            was_leader=None,
-            left_server=None),
+            is_new_user=False),
         expected_members={
             c.users.elliot: 2,
             c.users.angela: 1,
@@ -659,12 +651,11 @@ def test_membership():
     leave_and_validate(
         member=c.users.elliot,
         left_server=False,
-        expected_receipt=cm.MemberUpdateReceipt(
+        expected_receipt=cm.MemberLeaveReceipt(
             channel=c.model.channel,
             user=c.users.elliot,
             guests=2,
             guests_delta=-2,
-            is_new_user=None,
             was_leader=False,
             left_server=False),
         expected_members={
@@ -679,12 +670,11 @@ def test_membership():
     leave_and_validate(
         member=c.users.angela,
         left_server=True,
-        expected_receipt=cm.MemberUpdateReceipt(
+        expected_receipt=cm.MemberLeaveReceipt(
             channel=c.model.channel,
             user=c.users.angela,
             guests=1,
             guests_delta=-1,
-            is_new_user=None,
             was_leader=True,
             left_server=True),
         expected_members={})
