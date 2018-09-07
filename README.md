@@ -4,6 +4,7 @@ A [Discord](https://discordapp.com/) bot 🤖 for managing [Pokémon GO](https:/
 
 > Status: **Useful!**
 
+[![Build Status](https://img.shields.io/travis-ci/themattrix/discord-caravan/master.svg?style=flat-square)](https://travis-ci.org/themattrix/discord-caravan)
 
 ## Usage
 
