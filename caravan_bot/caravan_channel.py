@@ -575,8 +575,10 @@ def _(receipt: caravan_model.MemberLeaveReceipt) -> Iterable[str]:
                 ' both' if receipt.guests == 1 else ''),
             cause=random.choice(WAYS_TO_DIE),
             leader=(
-                f' and {receipt.user.display_name} has abandoned the '
-                f'caravan leader role' if receipt.was_leader else '')))
+                '' if not receipt.was_leader else
+                ' and {} abandoned the caravan leader role'.format(
+                    f'{receipt.user.display_name} has' if receipt.guests else
+                    'have'))))
 
 
 def gen_member_left_server_messages(who: str, guests: int):
