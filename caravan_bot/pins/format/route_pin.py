@@ -14,6 +14,7 @@ class RoutePin(base_pin.BasePin):
         caravan_model.ModeUpdateReceipt,
         caravan_model.RouteUpdateReceipt,
         caravan_model.RouteAdvancedReceipt,
+        caravan_model.RouteReversedReceipt,
     })
 
     def content_and_embed(self, model: caravan_model.CaravanModel) -> Dict:

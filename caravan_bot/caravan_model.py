@@ -191,6 +191,23 @@ class RouteAdvancedReceipt(UpdateReceipt):
             self.log(f'Route advanced; no more stops.')
 
 
+class RouteAtBeginning(Exception):
+    """
+    Raised if the caravan could not be reversed because the route is
+    already at the beginning.
+    """
+
+
+@dataclasses.dataclass(frozen=True)
+class RouteReversedReceipt(UpdateReceipt):
+    next_place: places.Place
+
+    def __post_init__(self):
+        self.log(
+            f'Route reversed; next place: {self.next_place.name} '
+            f'({self.next_place.location})')
+
+
 # noinspection PyArgumentList
 @dataclasses.dataclass
 class CaravanModel:
@@ -449,6 +466,33 @@ class CaravanModel:
             channel=self.channel,
             next_place=next_unvisited_place(self.route))
 
+    def reverse(self) -> RouteReversedReceipt:
+        """
+        Move the caravan back one stop. Useful after accidentally
+        advancing the caravan.
+
+        Returns a `RouteReversedReceipt` if the caravan could be
+        reversed.
+        Raises a `RouteNotActive` exception if the route is not active.
+        Raises a `RouteAtBeginning` exception if the route could not be
+        reversed further because it's already at the beginning.
+        """
+        if self.mode != CaravanMode.ACTIVE:
+            raise RouteNotActive()
+
+        if not self.route or not self.route[0].visited:
+            raise RouteAtBeginning()
+
+        prev_place = last_visited_place(route=self.route)
+
+        self.route = tuple(
+            (s.reset() if s.place == prev_place else s)
+            for s in self.route)
+
+        return RouteReversedReceipt(
+            channel=self.channel,
+            next_place=prev_place)
+
     def member_join(
             self,
             user: discord.Member,
@@ -601,8 +645,11 @@ def first_unvisited_index(caravan_route: CaravanRouteIter) -> int:
 
 
 def next_unvisited_place(route: CaravanRouteIter):
-    with contextlib.suppress(StopIteration):
-        return next(s.place for s in route if not s.visited)
+    return next((s.place for s in route if not s.visited), None)
+
+
+def last_visited_place(route: CaravanRoute):
+    return next((s.place for s in reversed(route) if s.visited), None)
 
 
 #

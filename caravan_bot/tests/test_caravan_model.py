@@ -328,7 +328,7 @@ def test_route_add_and_remove():
 
 
 # noinspection PyArgumentList
-def test_route_advance():
+def test_route_advance_and_reverse():
     c = Caravan()
 
     def p(name: str):
@@ -339,13 +339,24 @@ def test_route_advance():
         assert actual_receipt == expected_receipt
         assert c.model.route == expected_route
 
+    def reverse_and_validate(expected_receipt, expected_route):
+        actual_receipt = c.model.reverse()
+        assert actual_receipt == expected_receipt
+        assert c.model.route == expected_route
+
     with pytest.raises(cm.RouteNotActive):
         c.model.advance()
+
+    with pytest.raises(cm.RouteNotActive):
+        c.model.reverse()
 
     c.model.start()
 
     with pytest.raises(cm.RouteExhausted):
         c.model.advance()
+
+    with pytest.raises(cm.RouteAtBeginning):
+        c.model.reverse()
 
     c.model.set_route(new_route=(p('a'), p('b'), p('c')))
 
@@ -366,10 +377,24 @@ def test_route_advance():
             cm.CaravanStop(place=p('c'), visited=False, skip_reason=None),
         ))
 
+    reverse_and_validate(
+        expected_receipt=cm.RouteReversedReceipt(
+            channel=c.model.channel,
+            next_place=p('a')),
+        expected_route=(
+            cm.CaravanStop(place=p('a'), visited=False, skip_reason=None),
+            cm.CaravanStop(place=p('b'), visited=False, skip_reason=None),
+            cm.CaravanStop(place=p('c'), visited=False, skip_reason=None),
+        ))
+
+    c.model.advance()
     c.model.stop()
 
     with pytest.raises(cm.RouteNotActive):
         c.model.advance()
+
+    with pytest.raises(cm.RouteNotActive):
+        c.model.reverse()
 
     c.model.start()
 
@@ -395,6 +420,18 @@ def test_route_advance():
             cm.CaravanStop(place=p('c'), visited=True, skip_reason='reason'),
         ))
 
+    reverse_and_validate(
+        expected_receipt=cm.RouteReversedReceipt(
+            channel=c.model.channel,
+            next_place=p('c')),
+        expected_route=(
+            cm.CaravanStop(place=p('a'), visited=True, skip_reason=None),
+            cm.CaravanStop(place=p('b'), visited=True, skip_reason=''),
+            cm.CaravanStop(place=p('c'), visited=False, skip_reason=None),
+        ))
+
+    c.model.advance(skip_reason='reason')
+
     with pytest.raises(cm.RouteExhausted):
         c.model.advance()
 
@@ -408,7 +445,13 @@ def test_route_advance():
     with pytest.raises(cm.RouteNotActive):
         c.model.advance()
 
+    with pytest.raises(cm.RouteNotActive):
+        c.model.reverse()
+
     c.model.start()
+
+    with pytest.raises(cm.RouteAtBeginning):
+        c.model.reverse()
 
     advance_and_validate(
         skip_reason='eh',
