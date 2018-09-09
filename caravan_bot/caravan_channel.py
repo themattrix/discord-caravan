@@ -1,6 +1,7 @@
 import contextlib
 import dataclasses
 import functools
+import itertools
 import random
 
 from typing import Any, Callable, Coroutine, Iterable, Tuple, Optional
@@ -255,8 +256,7 @@ class CaravanChannel:
         try:
             return self.model.start()
         except caravan_model.ModeNotUpdated:
-            await self.info(
-                'The caravan has already been started!')
+            await self.info('The caravan has already been started!')
 
     # noinspection PyUnusedLocal
     @commands.register(
@@ -270,10 +270,13 @@ class CaravanChannel:
             cmd_msg: commands.CommandMessage
     ) -> Optional[caravan_model.ModeUpdateReceipt]:
         try:
+            # When the caravan is complete, it's not natural to `!next` past
+            # the last stop. Therefore, `!stop` implies `!next`.
+            with contextlib.suppress(caravan_model.RouteExhausted):
+                self.model.advance()
             return self.model.stop()
-        except caravan_model.ModeNotUpdated:
-            await self.info(
-                'The caravan is already _not_ active!')
+        except (caravan_model.RouteNotActive, caravan_model.ModeNotUpdated):
+            await self.info('The caravan is already _not_ active!')
 
     # noinspection PyUnusedLocal
     @commands.register(
@@ -288,8 +291,7 @@ class CaravanChannel:
         try:
             return self.model.reset()
         except caravan_model.ModeNotUpdated:
-            await self.info(
-                'The caravan is already _not_ active!')
+            await self.info('The caravan is already _not_ active!')
 
     # noinspection PyUnusedLocal
     @commands.register(
@@ -334,6 +336,29 @@ class CaravanChannel:
             await self.warn(
                 'No more gyms to skip!\n'
                 '_Try adding gyms with `!add` or `!append`._')
+
+    # noinspection PyUnusedLocal
+    @commands.register(
+        'prev', 'back',  # type: ignore
+        description='Back the caravan up to the previous gym.',
+        allowed_roles={Role.LEADER},
+        preferred='prev'
+    )
+    async def _prev(
+            self,
+            cmd_msg: commands.CommandMessage
+    ) -> Optional[caravan_model.RouteReversedReceipt]:
+        try:
+            return self.model.reverse()
+        except caravan_model.RouteNotActive:
+            await self.warn(
+                'The caravan is not in active mode, so it can\'t be '
+                'moved back one gym!\n'
+                '_First start the caravan with `!start`._')
+        except caravan_model.RouteAtBeginning:
+            await self.warn(
+                'Can\'t move the caravan back by one gym; it\'s already at '
+                'the beginning!\n')
 
     @commands.register(
         'add',
@@ -445,8 +470,7 @@ class CaravanChannel:
                 user=cmd_msg.message.author,
                 left_server=False)
         except caravan_model.MembersNotUpdated:
-            await self.info(
-                'You\'re already _not_ a member of this caravan!')
+            await self.info('You\'re already _not_ a member of this caravan!')
 
     async def _impl_add(
             self,
@@ -662,6 +686,15 @@ def _(receipt: caravan_model.RouteAdvancedReceipt) -> Iterable[str]:
     yield from gen_next_place_message(
         next_place=receipt.next_place,
         is_first=False)
+
+
+@user_notifications.register  # type: ignore  # noqa
+def _(receipt: caravan_model.RouteReversedReceipt) -> Iterable[str]:
+    yield '\n'.join(itertools.chain(
+        ('**Whoops!** _Backing the caravan up one gym._',),
+        gen_next_place_message(
+            next_place=receipt.next_place,
+            is_first=False)))
 
 
 def gen_next_place_message(next_place: Optional[places.Place], is_first: bool):

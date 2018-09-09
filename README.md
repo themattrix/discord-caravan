@@ -130,6 +130,7 @@ Set up your development environment:
 - [X] Docker Compose runner
 - [X] handle members who have left (or were banned from) the server
 - [X] CI: linting, type-checking, test running, and PR integration
+- [X] `!prev` command for when you accidentally `!next`
 - [ ] create and manage a role—containing all caravan members—for each caravan
 - [ ] `!kick` command
 - [ ] take gym distance into consideration when ranking gym name matches
