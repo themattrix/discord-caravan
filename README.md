@@ -131,13 +131,19 @@ Set up your development environment:
 - [X] handle members who have left (or were banned from) the server
 - [X] CI: linting, type-checking, test running, and PR integration
 - [X] `!prev` command for when you accidentally `!next`
+- [X] take gym distance into consideration when ranking gym name matches
 - [ ] create and manage a role—containing all caravan members—for each caravan
+- [ ] import gym JSON information into "gym channel" at start-up
+- [ ] allow gym channel users to supply new gyms, modify gyms, and delete gyms
+- [ ] allow gym channel users to supply gym aliases
+- [ ] allow gym channel users to supply helpful hints per gym (e.g., parking info)
+- [ ] when the caravan is active, allow members to signal `!here` for current stop (this applies until `!leave`)
 - [ ] `!kick` command
-- [ ] take gym distance into consideration when ranking gym name matches
 - [ ] handle pins containing unrecognized gym names
+
+#### Maybe
+
 - [ ] allow caravan members to restrict their attendance to partial routes
-- [ ] when the caravan is active, allow members to signal `!here`
-- [ ] allow leaders to `!lobby`
 - [ ] allow leaders to register start/stop times
 - [ ] notify members one hour prior to the caravan starting of the start time and starting location
 - [ ] automatically start/stop the caravan at the expected times

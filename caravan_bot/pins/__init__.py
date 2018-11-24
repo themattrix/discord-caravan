@@ -11,6 +11,7 @@ import discord
 from ..log import channel_log
 from .. import caravan_model
 from .. import places
+from .. import place_graph
 from .. import route
 from .format import base_pin
 from .parse import parse_receipts
@@ -74,6 +75,9 @@ async def init_pins(
     except route.UnknownPlaceNames as e:
         raise exceptions.InvalidPinFormat(
             f'Invalid gym(s): {e.unknown_names}') from None
+    except place_graph.NoPathThroughGraph:
+        raise exceptions.InvalidPinFormat(
+            f'Invalid route!') from None
 
     return PinReceipt(
         pins=await migration.migrate(
