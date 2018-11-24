@@ -1,8 +1,9 @@
 import dataclasses
 
-from typing import Iterable, Tuple
+from typing import Tuple, List  # noqa
 
 from . import caravan_model
+from . import place_graph
 from . import places
 from . import sanitize
 
@@ -18,24 +19,43 @@ def get_caravan_route(
         all_places: places.Places,
         fuzzy: bool) -> caravan_model.CaravanRoute:
 
-    # Ensure single-node routes start with a dash. just like multi-node routes.
+    # Ensure single-node routes start with a dash; just like multi-node routes.
     content = '- ' + content.lstrip('- ')
 
-    unknown_place_names = []
+    # Normalize the route into an iterable of place names.
+    sanitized_route_iter = sanitize.clean_route(content)
+    unknown_place_names = []  # type: List[str]
 
-    def gen_stops(route_nodes: Iterable[sanitize.RouteNode]):
-        for node in route_nodes:
-            try:
-                yield caravan_model.CaravanStop(
-                    place=all_places.get(name=node.name, fuzzy=fuzzy),
-                    visited=node.visited,
-                    skip_reason=node.skip_reason)
-            except places.PlaceNotFoundException:
-                unknown_place_names.append(node.name)
+    def ensure_places_are_known():
+        if unknown_place_names:
+            raise UnknownPlaceNames(tuple(sorted(unknown_place_names)))
 
-    stops = tuple(gen_stops(sanitize.clean_route(content)))
+    if fuzzy:
+        def gen_graph():
+            for node in sanitized_route_iter:
+                try:
+                    yield tuple(all_places.get_fuzzy(fuzzy_name=node.name))
+                except places.PlaceNotFoundException:
+                    unknown_place_names.append(node.name)
 
-    if unknown_place_names:
-        raise UnknownPlaceNames(tuple(sorted(unknown_place_names)))
+        graph = tuple(gen_graph())
+        ensure_places_are_known()
+
+        stops = tuple(
+            caravan_model.CaravanStop(place=place)
+            for place in place_graph.shortest_path(graph=graph))
+    else:
+        def gen_stops():
+            for node in sanitized_route_iter:
+                try:
+                    yield caravan_model.CaravanStop(
+                        place=all_places.get_exact(name=node.name),
+                        visited=node.visited,
+                        skip_reason=node.skip_reason)
+                except places.PlaceNotFoundException:
+                    unknown_place_names.append(node.name)
+
+        stops = tuple(gen_stops())
+        ensure_places_are_known()
 
     return stops

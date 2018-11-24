@@ -18,6 +18,7 @@ from . import commands
 from . import members
 from . import natural_language
 from . import places
+from . import place_graph
 from . import route
 
 
@@ -104,10 +105,14 @@ class CaravanChannel:
             await self.info(
                 f'No change to existing {len(self.model.route)}-gym route! '
                 f':map:')
+        except place_graph.NoPathThroughGraph:
+            await self.warn(
+                'Looks like you may have duplicated some gyms! Please check '
+                'that each stop in your route is unique.')
         except caravan_model.DuplicatePlacesException as e:
             await self.warn(
                 'The following {} duplicated: {}'.format(
-                    'gyms is' if len(e.duplicate_places) == 1 else 'gyms are',
+                    'gym is' if len(e.duplicate_places) == 1 else 'gyms are',
                     natural_language.join(
                         f'**{p.name}**' for p in e.duplicate_places)))
         except route.UnknownPlaceNames as e:
@@ -232,11 +237,12 @@ class CaravanChannel:
             cmd_msg: commands.CommandMessage
     ) -> Optional[caravan_model.RouteUpdateReceipt]:
         try:
-            return self.model.set_route(new_route=(
-                s.place for s in route.get_caravan_route(
-                    content=cmd_msg.args,
-                    all_places=self.gyms,
-                    fuzzy=True)))
+            with self.channel.typing():  # can take a few seconds
+                return self.model.set_route(new_route=(
+                    s.place for s in route.get_caravan_route(
+                        content=cmd_msg.args,
+                        all_places=self.gyms,
+                        fuzzy=True)))
         except caravan_model.EmptyRouteException:
             raise InvalidCommandArgs(
                 'You must specify at least one gym in the route; preferably '
