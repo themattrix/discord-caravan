@@ -74,14 +74,15 @@ class Places:
             self,
             fuzzy_name: str,
             score_cutoff: int = 60,
-            limit: int = 3
+            unique_limit: int = 3,
+            fuzzy_limit: int = 10,
             ) -> Iterator[FuzzyPlace]:
 
         results = fuzzywuzzy.process.extractBests(
             query=fuzzy_name,
             choices=tuple(self.__choices),
             score_cutoff=score_cutoff,
-            limit=limit)
+            limit=fuzzy_limit)
 
         if not results:
             raise PlaceNotFoundException(fuzzy_name)
@@ -97,6 +98,17 @@ class Places:
             self.places[self.aliases.get(name, name)]: score
             for name, score in sorted(results, key=operator.itemgetter(1))}
 
-        yield from (
+        # Create a `FuzzyPlace` per unique place.
+        fuzzy_places_iter = (
             FuzzyPlace(certainty=score / 100.0, place=place)
             for place, score in unique_results.items())
+
+        # Sort all of the fuzzy places by descending certainty (i.e., the most
+        # certain results appear first).
+        fuzzy_places_sorted = sorted(
+            fuzzy_places_iter,
+            key=lambda f: f.certainty,
+            reverse=True)
+
+        # Yield only the most certain `unique_limit` number of fuzzy places.
+        yield from itertools.islice(fuzzy_places_sorted, 0, unique_limit)
