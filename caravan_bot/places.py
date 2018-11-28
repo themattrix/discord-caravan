@@ -4,7 +4,7 @@ import json
 import operator
 import pathlib
 
-from typing import Dict, Iterator
+from typing import Dict, Iterator, Optional  # noqa
 
 import fuzzywuzzy.process
 
@@ -74,15 +74,14 @@ class Places:
             self,
             fuzzy_name: str,
             score_cutoff: int = 60,
-            unique_limit: int = 3,
-            fuzzy_limit: int = 10,
+            soft_limit: int = 3,
             ) -> Iterator[FuzzyPlace]:
 
         results = fuzzywuzzy.process.extractBests(
             query=fuzzy_name,
             choices=tuple(self.__choices),
             score_cutoff=score_cutoff,
-            limit=fuzzy_limit)
+            limit=len(tuple(self.__choices)))
 
         if not results:
             raise PlaceNotFoundException(fuzzy_name)
@@ -110,5 +109,12 @@ class Places:
             key=lambda f: f.certainty,
             reverse=True)
 
-        # Yield only the most certain `unique_limit` number of fuzzy places.
-        yield from itertools.islice(fuzzy_places_sorted, 0, unique_limit)
+        prev_certainty = None  # type: Optional[float]
+
+        # Yield roughly the first `soft_limit` number of fuzzy places, but
+        # don't stop in the middle of run of identical scores.
+        for i, fuzzy in enumerate(fuzzy_places_sorted):
+            if i >= soft_limit and fuzzy.certainty != prev_certainty:
+                break
+            yield fuzzy
+            prev_certainty = fuzzy.certainty

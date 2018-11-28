@@ -85,7 +85,7 @@ class GraphRow:
             or fuzzy.place not in self.duplicate_places)
 
 
-def gen_unique_graphs(graph: Graph, limit: int = 100) -> Iterator[Graph]:
+def gen_unique_graphs(graph: Graph, limit: int = 200) -> Iterator[Graph]:
     graph = ((ROOT_PLACE,),) + graph  # type: ignore
 
     duplicate_places = frozenset(
@@ -125,7 +125,7 @@ def gen_unique_graphs(graph: Graph, limit: int = 100) -> Iterator[Graph]:
         for row in rows))
 
     # Since the more accurate orderings are given first, we'll slice them off
-    # at `limit` (default: 100) to save lots of time.
+    # at `limit` (default: 200) to save lots of time.
     dup_ordering_iter = itertools.islice(dup_ordering_iter, limit)
 
     count = 0
@@ -210,7 +210,7 @@ ROOT_PLACE = places.FuzzyPlace(
     place=places.Place(name='', location=''))
 
 
-def edge_cost(src: places.FuzzyPlace, dst: places.FuzzyPlace) -> Cost:
+def edge_cost(src: FuzzyPlace, dst: FuzzyPlace) -> Cost:
     # The cost from or to ROOT_PLACE is always 0.
     if ROOT_PLACE in (src, dst):
         return 0

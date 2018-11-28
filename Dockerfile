@@ -1,10 +1,10 @@
 FROM python:3.7
 
-RUN python -m pip install pipenv==2018.7.1
+RUN python -m pip install pipenv
 
 WORKDIR /usr/src/app
 
-COPY ./Pipfile ./
+COPY ./Pipfile* ./
 RUN pipenv install
 
 COPY ./caravan_bot ./caravan_bot
