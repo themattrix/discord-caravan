@@ -54,7 +54,6 @@ def test_score_cutoff():
     })
 
     for cutoff in range(11):
-        print(cutoff)
         assert frozenset(f.place.name for f in all_places.get_fuzzy(
             fuzzy_name='aaaaaaaaaa',
             score_cutoff=cutoff * 10,

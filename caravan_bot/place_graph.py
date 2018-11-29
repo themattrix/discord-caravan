@@ -1,10 +1,12 @@
 import collections
 import dataclasses
 import functools
+import heapq
 import itertools
 import operator
 
-from typing import Callable, Dict, FrozenSet, Iterator, Tuple, Optional  # noqa
+from typing import (  # noqa
+    Callable, Dict, FrozenSet, Iterator, List, Optional, Set, Tuple)
 
 from haversine import haversine
 
@@ -154,11 +156,6 @@ def dijkstra(
         cost_calculator: Callable[[FuzzyPlace, FuzzyPlace], float]
         ) -> FoundPath:
 
-    vertices = set(
-        fuzzy
-        for group in graph
-        for fuzzy in group)
-
     def get_neighbor(g: int) -> FuzzyPlaces:
         try:
             return graph[g + 1]
@@ -171,28 +168,50 @@ def dijkstra(
         for fuzzy in group
     }  # type: Dict[FuzzyPlace, FuzzyPlaces]
 
+    # Records the cost from the starting node (ROOT_PLACE) to every other
+    # place. Initially these costs are all unknown and thus are set to
+    # infinity.
+    path_costs = {
+        fuzzy: inf
+        for group in graph
+        for fuzzy in group
+        if fuzzy != ROOT_PLACE
+    }  # type: Dict[FuzzyPlace, float]
+
+    # Each entry in this dictionary points to its lowest cost neighbor. After
+    # the entire graph is explored, this is used to reconstruct the shortest
+    # path.
     previous = {}  # type: Dict[FuzzyPlace, FuzzyPlace]
 
-    costs = {
-        fuzzy: 0 if fuzzy == ROOT_PLACE else inf
-        for fuzzy in vertices}
+    # Priority queue containing the nodes to visit next. Each node is a 3-tuple
+    # containing the path cost, an always-incrementing value, and the fuzzy
+    # place to visit. The incrementing value is just to break ties in case the
+    # path costs are identical between two nodes.
+    counter = itertools.count()
+    pq = [
+        (0, next(counter), ROOT_PLACE)
+    ]  # type: List[Tuple[float, int, FuzzyPlace]]
 
-    while vertices:
-        fuzzy = min(vertices, key=lambda v: costs[v])
+    # Only visit each node once.
+    visited = set()  # type: Set[FuzzyPlace]
 
-        if costs[fuzzy] == inf:
-            break
+    while pq:
+        path_cost, _, node = heapq.heappop(pq)
 
-        for neighbor in neighbors[fuzzy]:
-            cost = costs[fuzzy] + cost_calculator(fuzzy, neighbor)
+        if node in visited:
+            continue
 
-            if cost < costs[neighbor]:
-                costs[neighbor] = cost
-                previous[neighbor] = fuzzy
+        visited.add(node)
 
-        vertices.remove(fuzzy)
+        for neighbor in neighbors[node]:
+            neighbor_cost = path_cost + cost_calculator(node, neighbor)
 
-    dst = min(graph[-1], key=lambda v: costs[v])
+            if neighbor_cost < path_costs[neighbor]:
+                path_costs[neighbor] = neighbor_cost
+                previous[neighbor] = node
+                heapq.heappush(pq, (neighbor_cost, next(counter), neighbor))
+
+    dst = min(graph[-1], key=lambda v: path_costs[v])
 
     def gen_reversed_path() -> Iterator[Place]:
         v = dst
@@ -201,7 +220,7 @@ def dijkstra(
             v = previous[v]
 
     return FoundPath(
-        cost=costs[dst],
+        cost=path_costs[dst],
         path=tuple(reversed(tuple(gen_reversed_path()))))
 
 
