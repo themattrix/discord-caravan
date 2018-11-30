@@ -463,9 +463,10 @@ class CaravanChannel:
                 f'_Modify your guest count with `!join +N`._')
 
     @commands.register(
-        'leave',  # type: ignore
+        'leave', 'unjoin',  # type: ignore
         description='Leave the route (with registered guests).',
         allowed_roles={Role.MEMBER},
+        preferred='leave',
     )
     async def _leave(
             self,
@@ -477,6 +478,60 @@ class CaravanChannel:
                 left_server=False)
         except caravan_model.MembersNotUpdated:
             await self.info('You\'re already _not_ a member of this caravan!')
+
+    @commands.register(
+        'notify',  # type: ignore
+        description='Notify all caravan members of something.',
+        usage='!{cmd} [message]',
+    )
+    async def _notify(self, cmd_msg: commands.CommandMessage):
+        if not cmd_msg.args:
+            raise InvalidCommandArgs('You must specify a message!')
+
+        author = cmd_msg.message.author
+
+        member_list = ' '.join(
+            m.mention
+            for m in sorted(
+                self.model.members.keys(),
+                key=lambda m: m.display_name)
+            if m != author)
+
+        if not member_list:
+            await self.info(
+                f'No{" other" if author in self.model.members else ""} '
+                f'caravan members to notify!')
+            return
+
+        def get_relevant_author_role() -> str:
+            roles = frozenset(self.model.gen_roles(author))
+
+            # The author of a notification is most likely a caravan leader
+            # informing the caravan of something important. For the purposes
+            # of notifications, this role even supersedes ADMIN.
+            if Role.LEADER in roles:
+                return 'caravan leader'
+
+            # If the author is not a leader but _is_ an admin, the notification
+            # is likely server-related, or perhaps is being sent on behalf of
+            # the leader (maybe even before a leader has been chosen).
+            if Role.ADMIN in roles:
+                return 'admin'
+
+            # If the author is a caravan member with no other special role,
+            # then it's pretty straightforward.
+            if Role.MEMBER in roles:
+                return 'caravan member'
+
+            # Otherwise, this is a non-member messaging the caravan, perhaps
+            # requesting info before joining.
+            return 'non-caravan member'
+
+        await self.info(
+            f'**__{author.display_name}__ ({get_relevant_author_role()})** '
+            f':loudspeaker:\n'
+            f'{cmd_msg.args}\n'
+            f'{member_list}')
 
     async def _impl_add(
             self,
