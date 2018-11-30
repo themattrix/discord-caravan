@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "647e1ceebb8bb9901df7c9ccdfb85ee839dcba07269cf7ddaeb57954106c9575"
+            "sha256": "2b373b1d34904f3409efd93af69a60d53a5480e9bb7e9aca126a043db9d43165"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -18,7 +18,7 @@
     "default": {
         "discord-py": {
             "git": "https://github.com/Rapptz/discord.py.git",
-            "ref": "860d6a9ace8248dfeec18b8b159e7b757d9f56bb"
+            "ref": "66e5033785259400d340b8c00eaa8ad60fbbb82a"
         },
         "discord.py": {
             "git": "https://github.com/Rapptz/discord.py.git",
@@ -44,11 +44,12 @@
         },
         "haversine": {
             "hashes": [
-                "sha256:63b9ceb3d2992314fe74948f57afd7d0fb623663ca32f2973565156aa34b9c52",
-                "sha256:d29739072c8f8b98aa8c3c13a35520f212bbdf4f17927d4a6cc878d559698fbe"
+                "sha256:145b5941d9438fbea0ce67cbc1b786a94c8618bfde07272a6a568464e7f73cd9",
+                "sha256:1cff54bc5fc04a42e53a55d08199865fbdd6f8e7c8874e66193e7e4d8227735b",
+                "sha256:c40cd6359c91d9516d279144c1af968b069e9e87aebc957d4fa56c113678cca6"
             ],
             "index": "pypi",
-            "version": "==1.0.2"
+            "version": "==2.0.0"
         },
         "inflection": {
             "hashes": [
@@ -61,7 +62,7 @@
             "hashes": [
                 "sha256:033a11de5e3d19ea25c9302d11224e1a1898fe5abd23c61c7c360c25195e3eb1"
             ],
-            "markers": "extra == 'speedup'",
+            "index": "pypi",
             "version": "==0.12.0"
         }
     },
@@ -148,11 +149,11 @@
         },
         "pytest": {
             "hashes": [
-                "sha256:488c842647bbeb350029da10325cb40af0a9c7a2fdda45aeb1dda75b60048ffb",
-                "sha256:c055690dfefa744992f563e8c3a654089a6aa5b8092dded9b6fafbd70b2e45a7"
+                "sha256:1d131cc532be0023ef8ae265e2a779938d0619bb6c2510f52987ffcba7fa1ee4",
+                "sha256:ca4761407f1acc85ffd1609f464ca20bb71a767803505bd4127d0e45c5a50e23"
             ],
             "index": "pypi",
-            "version": "==4.0.0"
+            "version": "==4.0.1"
         },
         "six": {
             "hashes": [
