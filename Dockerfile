@@ -1,6 +1,6 @@
 FROM python:3.7
 
-RUN python -m pip install pipenv
+RUN python -m pip install pipenv==2018.11.26
 
 WORKDIR /usr/src/app
 

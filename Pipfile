@@ -2,11 +2,12 @@
 python_version = "3.7"
 
 [packages]
-"discord.py" = { git = "https://github.com/Rapptz/discord.py.git", ref = "rewrite" }
-"docopt" = { version = "*" }
-"haversine" = { version = "*" }
-"fuzzywuzzy" = { version = "*", extras = ["speedup"] }
-"inflection" = { version = "*" }
+"discord.py" = {git = "https://github.com/Rapptz/discord.py.git",ref = "rewrite"}
+docopt = "*"
+haversine = "*"
+fuzzywuzzy = {version = "*", extras = ["speedup"]}
+inflection = "*"
+python-levenshtein = "*"
 
 [dev-packages]
 pytest = "*"
