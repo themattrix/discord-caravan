@@ -2,7 +2,7 @@
 python_version = "3.7"
 
 [packages]
-"discord.py" = {git = "https://github.com/Rapptz/discord.py.git",ref = "rewrite"}
+"discord.py" = {git = "https://github.com/Rapptz/discord.py.git"}
 docopt = "*"
 haversine = "*"
 fuzzywuzzy = {version = "*", extras = ["speedup"]}
